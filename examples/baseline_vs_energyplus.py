@@ -80,9 +80,10 @@ ALIGNMENT = [
      "FIXED"),
 
     ("Window shading",
-     "0.25 m horizontal overhang, ISO 52016 Annex F factor",
-     "no shading surfaces -> overhang disabled on the ISO side instead",
-     "FIXED"),
+     "the declared 0.25 m overhang has NO effect: ISO 52010 emits the W_* columns "
+     "but the factor is 1.0000 for all 8760 hours, so no shading is applied",
+     "no shading surfaces either — the two therefore already agree",
+     "ALIGNED"),
 
     ("Adjacent zones",
      "ISO 13789 UNCONDITIONED buffer: theta_ztu = (1-b_ztu)*theta_int + b_ztu*T_out, "
@@ -208,10 +209,17 @@ def aligned_building() -> dict:
     """
     build_bui() with the ISO-side alignment corrections applied.
 
-    Only the window overhang is touched: EnergyPlus has no matching shading
-    geometry in this IDF, and the ISO Annex F overhang factor cannot be
-    reproduced exactly, so shading is removed from both sides rather than
-    modelled inconsistently on one.
+    Only the window overhang is touched, and for this geometry that is a
+    **no-op**: the engine emits the W_* shading columns but returns a factor of
+    1.0000 for all 8760 hours, so the declared 0.25 m overhang never shades
+    anything. Removing it is kept anyway as a safeguard, so that a deeper
+    overhang on some other building cannot silently apply on the ISO side while
+    the IDF has no matching shading surface.
+
+    Verified: build_bui() and aligned_building() give bit-identical annual
+    results (21.018148 kWh heating, 3394.859182 kWh cooling on Athens), which is
+    also what makes this script's ISO figures directly comparable with the
+    baseline column of compare_branches_apt305.py.
     """
     from apt305_building import build_bui
     bui = build_bui()

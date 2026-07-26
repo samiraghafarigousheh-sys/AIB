@@ -70,19 +70,27 @@ python examples/baseline_vs_energyplus.py --energyplus /opt/ep/energyplus
 
 It prints a **parameter alignment audit** before running. That audit is the
 point of the script: several ISO behaviours are invisible in the building
-dictionary, and three of them dominate the comparison.
+dictionary, and the first three below dominate the comparison.
 
 | Finding | Detail |
 | --- | --- |
 | **Internal gains ignore `full_load`** | `internal_gains()` returns ISO 16798-1 tabulated `q_int` for `building_type_class` × `a_use`, plus the neighbours' transferred gains. The dictionary says 16 W/m²; the engine uses **52.8 W/m²** (occupants 30.8, appliances 22.0, lighting **0.0**). Only the *profiles* are taken from the dictionary. |
 | **Neighbours are unconditioned buffers, not conditioned rooms** | `θ_ztu = (1−b_ztu)·θ_int + b_ztu·T_out`, with b_ztu = 0.73–0.93 here — so they mostly track **outdoor** air. Pinning them at a fixed 21 °C in EnergyPlus (as a naive IDF does) changes total energy by ~40×. |
 | **Control is on operative temperature** | ISO controls 0.5·T_air + 0.5·MRT; an EnergyPlus thermostat defaults to zone **air** temperature, which ran ~2 K cooler. |
+| **Declared window shading does nothing** | The 0.25 m overhang on both windows produces a shading factor of exactly **1.0000 for all 8760 hours**. The `W_*` columns are emitted, but no shading is ever applied — so `shading: True` in the building dictionary is silently inert here. |
 
-The script corrects all three — probing the engine for its real gain magnitudes
-and b_ztu values, then building the IDF from them — plus the frame fraction,
-surface film coefficient, radiant split, internal capacitance, daylight saving
-and day-of-week. Four differences remain irreducible (timestep, solar
-distribution, surface heat transfer algorithm, and the RC-vs-CTF split).
+**Cross-check.** The ISO figures in this comparison are bit-identical to the
+`Baseline` column of `compare_branches_apt305.py` — 21.018148 kWh heating and
+3394.859182 kWh cooling — confirming both harnesses drive the same unmodified
+engine with the same inputs.
+
+The script corrects the first three — probing the engine for its real gain
+magnitudes and b_ztu values, then building the IDF from them — plus the frame
+fraction, surface film coefficient, radiant split, internal capacitance,
+thermostat control type, daylight saving and day-of-week.
+
+**22 parameters checked: 10 already aligned, 9 corrected, 3 irreducible**
+(timestep, solar distribution, and the surface heat transfer algorithm).
 
 ### Run it locally
 
