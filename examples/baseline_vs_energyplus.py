@@ -625,14 +625,21 @@ if sys.argv[5] == "probe-only":
 b, _ = sanitize_and_validate_BUI(bui, fix=True)
 res = ISO52016.Temperature_and_Energy_needs_calculation(
     b, weather_source="epw", path_weather_file=sys.argv[3])
-annual = res[1]
+
+# Handle both 2-tuple (PyPI) and 3-tuple (fork with Sankey) returns
+sankey_data = {}
+if len(res) == 3:
+    hourly, annual, sankey_data = res
+else:
+    hourly, annual = res
+
 def g(k):
     return float(pd.to_numeric(annual[k], errors="coerce").iloc[0]) if k in annual.columns else float("nan")
 json.dump({"heating_kWh": g("Q_H_annual_kWh"),
            "cooling_kWh": g("Q_C_annual_kWh"),
            "latent_kWh":  g("Q_latent_annual_kWh"),
            "int_gains_kWh": g("Q_internal_gains_kWh"),
-           "b_ztu": b_ztu, "gains_w": gains_w},
+           "b_ztu": b_ztu, "gains_w": gains_w, "sankey": sankey_data},
           open(sys.argv[4], "w"))
 '''
 
@@ -687,6 +694,83 @@ class BaselineEngine:
 
 
 # ---------------------------------------------------------------------------
+# Sankey Diagram
+# ---------------------------------------------------------------------------
+
+def _sankey_chart(sankey_data: dict, outdir: Path) -> None:
+    """
+    Generate a Sankey diagram showing energy flows for pybuilding energy.
+
+    Sankey data structure: {"sources": [...], "targets": [...], "values": [...]}
+    """
+    if not sankey_data or "sources" not in sankey_data:
+        return  # Skip if no Sankey data available
+
+    try:
+        import plotly.graph_objects as go
+        import plotly.io as pio
+
+        sources = sankey_data.get("sources", [])
+        targets = sankey_data.get("targets", [])
+        values = sankey_data.get("values", [])
+
+        if not sources or not targets or not values:
+            return
+
+        # Create color palette for nodes
+        unique_nodes = list(dict.fromkeys(sources + targets))
+        node_colors = {
+            node: ["#2a78d6", "#eb6834", "#6ba547", "#d97706", "#8b5cf6", "#ec4899"][i % 6]
+            for i, node in enumerate(unique_nodes)
+        }
+        node_color_list = [node_colors.get(node, "#999999") for node in unique_nodes]
+
+        # Map node names to indices
+        source_indices = [unique_nodes.index(s) for s in sources]
+        target_indices = [unique_nodes.index(t) for t in targets]
+
+        fig = go.Figure(data=[go.Sankey(
+            node=dict(
+                pad=15,
+                thickness=20,
+                line=dict(color="black", width=0.5),
+                label=unique_nodes,
+                color=node_color_list,
+            ),
+            link=dict(
+                source=source_indices,
+                target=target_indices,
+                value=values,
+                color=[node_colors.get(sources[i], "#cccccc") for i in range(len(sources))],
+            )
+        )])
+
+        fig.update_layout(
+            title="Apt 305 — pyBuildingEnergy Energy Flows (Sankey)",
+            font=dict(size=10, color="#0b0b0b"),
+            plot_bgcolor="#fcfcfb",
+            paper_bgcolor="#fcfcfb",
+            height=500,
+            margin=dict(l=20, r=20, t=50, b=20),
+        )
+
+        out_html = outdir / "sankey_pybuildingenergy.html"
+        fig.write_html(str(out_html))
+        print(f"sankey   -> {out_html}")
+
+        # Also try to save as PNG
+        out_png = outdir / "sankey_pybuildingenergy.png"
+        try:
+            fig.write_image(str(out_png), width=1000, height=600)
+            print(f"sankey   -> {out_png}")
+        except Exception:
+            pass  # kaleido not available, PNG skipped
+
+    except ImportError:
+        pass  # plotly not available
+
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 
@@ -694,7 +778,7 @@ SERIES_COLORS = ["#2a78d6", "#eb6834"]   # validated categorical slots 1-2
 SURFACE, TEXT_PRIMARY, TEXT_SECONDARY, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e1"
 
 
-def report(iso: dict, ep: dict, area: float, outdir: Path, subtitle: str):
+def report(iso: dict, ep: dict, area: float, outdir: Path, subtitle: str, sankey_data: dict | None = None):
     rows = []
     for label, key in (("Heating", "heating_kWh"), ("Cooling", "cooling_kWh")):
         rows.append((label, iso[key], ep[key]))
@@ -732,6 +816,8 @@ def report(iso: dict, ep: dict, area: float, outdir: Path, subtitle: str):
     (outdir / "baseline_vs_energyplus.md").write_text("\n".join(md) + "\n", encoding="utf-8")
 
     _chart(rows, outdir, subtitle)
+    if sankey_data:
+        _sankey_chart(sankey_data, outdir)
     return rows
 
 
@@ -878,7 +964,8 @@ def main() -> None:
                 else f"E+ neighbours pinned at {args.adj_temp} °C")
     subtitle = (f"{wlabel}  ·  identical geometry, fabric, schedules, setpoints, "
                 f"ventilation  ·  {adj_desc}")
-    report(iso, ep, area, args.outdir, subtitle)
+    sankey_data = iso.get("sankey", {})
+    report(iso, ep, area, args.outdir, subtitle, sankey_data)
 
     if iso.get("latent_kWh") == iso.get("latent_kWh") and iso.get("latent_kWh"):
         print(f"note: the ISO engine also reports {iso['latent_kWh']:,.1f} kWh of latent load "
