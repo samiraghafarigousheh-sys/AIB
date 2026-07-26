@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EN 16798 Cooling System Implementation Audit</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #5f6b77;
+      --line: #d7dde5;
+      --soft: #f4f7fb;
+      --soft-blue: #edf7fc;
+      --blue: #0f609b;
+      --green: #1f7a4d;
+      --amber: #956000;
+      --code-bg: #eef2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font: 16px/1.56 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+      padding: 32px 24px 26px;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 24px 64px;
+    }
+    h1 {
+      max-width: 980px;
+      margin: 0 auto 10px;
+      font-size: clamp(2rem, 4vw, 3rem);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    header p {
+      max-width: 980px;
+      margin: 0 auto;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    h2 {
+      margin: 42px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 1.55rem;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 26px 0 10px;
+      font-size: 1.12rem;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--blue); }
+    code {
+      background: var(--code-bg);
+      border-radius: 4px;
+      padding: 0.12em 0.28em;
+      font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+      font-size: 0.92em;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      overflow-x: auto;
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+      font-size: 0.92rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 24px;
+      table-layout: fixed;
+    }
+    th, td {
+      vertical-align: top;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+    }
+    th {
+      background: var(--soft);
+      text-align: left;
+      font-weight: 650;
+    }
+    ul { margin: 0 0 12px; padding-left: 22px; }
+    li { margin: 3px 0; }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 24px;
+    }
+    nav a {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: #fff;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 14px 0 24px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 15px 16px;
+      background: #fff;
+    }
+    .card h3 { margin-top: 0; }
+    .note, .warning {
+      border: 1px solid var(--line);
+      border-left-width: 5px;
+      border-radius: 6px;
+      padding: 13px 16px;
+      margin: 16px 0 22px;
+    }
+    .note {
+      border-left-color: var(--blue);
+      background: var(--soft-blue);
+    }
+    .warning {
+      border-left-color: var(--amber);
+      background: #fffaf0;
+    }
+    .formula {
+      margin: 8px 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfe;
+      font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+      overflow-x: auto;
+    }
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.78rem;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .implemented { color: var(--green); background: #e9f7ef; }
+    .simplified { color: var(--amber); background: #fff6dd; }
+    .link-small { color: var(--muted); font-size: 0.92rem; }
+    @media (max-width: 780px) {
+      .grid { grid-template-columns: 1fr; }
+      table { table-layout: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EN 16798 Cooling System Implementation Audit</h1>
+    <p>
+      Audit map for the cooling-side modules added around the heat-pump example:
+      EN 16798-9 operating conditions, EN 16798-15 cooling storage and
+      EN 16798-13 cooling generation.
+    </p>
+  </header>
+
+  <main>
+    <nav aria-label="Page sections">
+      <a href="#scope">Scope</a>
+      <a href="#chain">Example Chain</a>
+      <a href="#crosswalk">Standard Crosswalk</a>
+      <a href="#inputs">Inputs</a>
+      <a href="#formulas">Formulas</a>
+      <a href="#outputs">Outputs</a>
+      <a href="#run">Run And Inspect</a>
+      <a href="#limits">Limits</a>
+    </nav>
+
+    <section id="scope">
+      <h2>Scope And Decision</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>EN 15316-2 And EN 15316-3</h3>
+          <p>
+            Cooling emission and water-based cooling distribution were already
+            present in <code>EmissionSystemCalculator</code> and
+            <code>DistributionSystemCalculator</code>. The example chain now
+            explicitly feeds the cooling-side outputs of those modules into the
+            EN 16798 cooling modules.
+          </p>
+        </div>
+        <div class="card">
+          <h3>EN 16798 Integration</h3>
+          <p>
+            The attached standards are relevant because EN 15316-4-2 is a
+            heating and DHW heat-pump generation method. Space cooling is now
+            handled by EN 16798-9, EN 16798-15 and EN 16798-13 by default,
+            while the earlier reversible heat-pump cooling calculation remains
+            available as a simplified comparison path.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Main Source Files</h3>
+          <p><code>src/pybuildingenergy/source/cooling_16798_9.py</code></p>
+          <p><code>src/pybuildingenergy/source/cooling_storage_16798_15.py</code></p>
+          <p><code>src/pybuildingenergy/source/cooling_generation_16798_13.py</code></p>
+          <p><code>examples/heat_pump_15316_4_2_example.py</code></p>
+        </div>
+        <div class="card">
+          <h3>Implemented Cooling Boundary</h3>
+          <p>
+            The default examples model a water-based room cooling system,
+            chilled-water buffer storage and an air-to-water compression cooling
+            generator using EER/capacity product-map data.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="chain">
+      <h2>Default Example Chain</h2>
+      <p>
+        The <code>full</code> path is the default. It keeps the EN 15316 modules
+        for room emission, water distribution and heating/DHW storage, then uses
+        EN 16798 for cooling operating conditions, cooling storage and cooling
+        generation.
+      </p>
+      <pre><code>ISO 52016 sensible heating/cooling needs
+  -> EN 15316-2 emission effects for heating and cooling
+  -> EN 12831-3 DHW energy-need profile
+  -> EN 16798-9 cooling operating conditions
+  -> EN 15316-3 heating/cooling/DHW distribution
+  -> EN 15316-5 heating/DHW storage
+  -> EN 16798-15 cooling storage
+  -> EN 14511/EN 14825 product performance data
+  -> EN 16798-13 cooling generation
+  -> EN 15316-4-2 heating/DHW heat-pump generation</code></pre>
+      <div class="note">
+        In the default path, cooling electricity is reported by
+        <code>CoolingGenerationSystemCalculator</code>. Heating and DHW
+        electricity are still reported by <code>HeatPumpSystemCalculator</code>.
+        The example writes <code>combined_generation_summary.csv</code> so the
+        inspection plots and annual cards show one combined generator view.
+      </div>
+    </section>
+
+    <section id="crosswalk">
+      <h2>Standard To Code Crosswalk</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 18%">Standard Location</th>
+            <th style="width: 22%">Audit Topic</th>
+            <th style="width: 24%">Code Location</th>
+            <th>Implementation Notes</th>
+            <th style="width: 12%">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>EN 16798-9, clauses 5.1 and 6.1</td>
+            <td>Cooling-system outputs and calculation interval.</td>
+            <td><code>CoolingSystemCalculator.run_timeseries()</code></td>
+            <td>
+              Produces hourly required generation outlet temperature,
+              distribution flow and return temperatures, distribution volume
+              flow, and cooling request passed towards storage or generation.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-9, clauses 6.4.2 and 7.4.2</td>
+            <td>Required chilled-water temperatures.</td>
+            <td><code>CoolingSystemCalculator._distribution_flow_temperature()</code></td>
+            <td>
+              Supports constant flow temperature and outdoor-compensated flow
+              temperature with minimum and maximum limits. Generator outlet
+              temperature follows either the fixed setpoint or the required
+              distribution flow temperature.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-9, clauses 7.4.2.3 and 7.4.2.4</td>
+            <td>Distribution volume flow and return temperature.</td>
+            <td>
+              <code>CoolingSystemCalculator._volume_flow()</code><br>
+              <code>CoolingSystemCalculator._return_temperature()</code>
+            </td>
+            <td>
+              Variable flow is proportional to the current load and capped at
+              design flow when design data are supplied. Otherwise it is derived
+              from cooling energy, time step and design delta T.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-9, clauses 7.4.3.1 to 7.4.3.3</td>
+            <td>Cooling request handoff to storage or generation.</td>
+            <td><code>CoolingSystemCalculator._simulate()</code></td>
+            <td>
+              The request starts from the EN 15316-2/3 cooling demand columns
+              when available. Optional simplified cooling distribution losses
+              can be added, but the full example uses EN 15316-3 for detailed
+              distribution losses.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-15, clause 6.5.2</td>
+            <td>Required storage inlet temperature.</td>
+            <td><code>CoolingStorageSystemCalculator._simulate()</code></td>
+            <td>
+              The storage module passes the required cooling-side generator
+              outlet temperature through to <code>T_C_sink_C</code> for the
+              cooling generator.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-15, clause 6.5.3.4</td>
+            <td>Heat gains from storage, distribution loop and generator loop.</td>
+            <td><code>CoolingStorageSystemCalculator._simulate()</code></td>
+            <td>
+              Calculates heat gains using heat-loss coefficients, ambient
+              temperature, chilled-water temperatures and time step. Gains are
+              added to the cooling energy that must be removed by the generator.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-15, clauses 6.5.3.6 and 6.5.3.7</td>
+            <td>Storage pump auxiliary energy and recoverable losses.</td>
+            <td>
+              <code>CoolingStorageSystemCalculator._pump_runtime()</code><br>
+              <code>CoolingStorageSystemCalculator._simulate()</code>
+            </td>
+            <td>
+              Pump runtime is demand based unless continuous operation is
+              requested. Cooling recoverable heat uses the cooling sign
+              convention, so recoverable cooling-side heat terms are negative.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-13, clause 6.4.2.1</td>
+            <td>Condenser/source and generator outlet temperatures.</td>
+            <td>
+              <code>CoolingGenerationSystemCalculator._prepare_timeseries()</code><br>
+              <code>CoolingGenerationSystemCalculator._default_source_temperature()</code>
+            </td>
+            <td>
+              Air-cooled examples use outdoor air as the heat-rejection/source
+              temperature. Wet, dry, hybrid and other heat-rejection types have
+              explicit fallback temperature options.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-13, clause 6.4.2.2</td>
+            <td>Free-cooling operating factor.</td>
+            <td><code>CoolingGenerationSystemCalculator._free_cooling_factor()</code></td>
+            <td>
+              Optional free cooling can be enabled for non air-conditioning
+              heat-rejection types. It is disabled in the Athens and Bolzano
+              air-to-water heat-pump examples.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-13, clause 6.4.2.3</td>
+            <td>Maximum cooling extraction and part-load ratio.</td>
+            <td><code>CoolingGenerationSystemCalculator._simulate()</code></td>
+            <td>
+              Available cooling is capacity times operation factor times time
+              step. Part load is mechanical cooling delivered divided by
+              available cooling capacity over the time step.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-13, clauses 6.4.3.1 and 6.4.3.2</td>
+            <td>Cooling removed, rejected heat and compressor electricity.</td>
+            <td>
+              <code>CoolingGenerationSystemCalculator._capacity_and_eer()</code><br>
+              <code>CoolingGenerationSystemCalculator._simulate()</code>
+            </td>
+            <td>
+              Uses product cooling maps with capacity and EER as the preferred
+              path. If no map is supplied, nominal capacity and nominal EER are
+              used with a temperature-lift correction.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-13, clause 6.4.3.5</td>
+            <td>Cooling generator auxiliaries.</td>
+            <td><code>CoolingGenerationSystemCalculator._auxiliary_energy()</code></td>
+            <td>
+              Adds heat-rejection auxiliaries when they are not included in the
+              performance data, plus control and extra auxiliary power during
+              cooling generator runtime.
+            </td>
+            <td><span class="status implemented">implemented</span></td>
+          </tr>
+          <tr>
+            <td>EN 16798-13, Annex B defaults</td>
+            <td>Fallback nominal EER.</td>
+            <td><code>_default_nominal_eer()</code></td>
+            <td>
+              Provides a fallback nominal EER by capacity class. Formal studies
+              should prefer product data or national annex data.
+            </td>
+            <td><span class="status simplified">fallback</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="inputs">
+      <h2>Main Inputs</h2>
+      <h3>Cooling Operating Conditions: <code>CoolingSystemCalculator</code></h3>
+      <table>
+        <tr><th>Input</th><th>Code/API name</th><th>Purpose</th></tr>
+        <tr><td>Cooling demand after room emission</td><td><code>Q_C_kWh</code>, <code>Q_C_em_in_kWh</code>, <code>Q_C_dis_out_kWh</code></td><td>Cooling request to the distribution side.</td></tr>
+        <tr><td>Outdoor temperature</td><td><code>T_ext</code>, <code>theta_ext</code></td><td>Outdoor compensation and source temperature audit context.</td></tr>
+        <tr><td>Water temperature control</td><td><code>distribution_temperature_control</code>, <code>theta_C_dis_flw_set_C</code>, <code>theta_C_dis_flw_set_min_C</code>, <code>theta_C_dis_flw_set_max_C</code></td><td>Defines required chilled-water flow temperature.</td></tr>
+        <tr><td>Flow control and design data</td><td><code>distribution_flow_control</code>, <code>design_flow_m3_h</code>, <code>design_cooling_load_kW</code>, <code>design_deltaT_K</code></td><td>Calculates cooling distribution volume flow and return temperature.</td></tr>
+      </table>
+
+      <h3>Cooling Storage: <code>CoolingStorageSystemCalculator</code></h3>
+      <table>
+        <tr><th>Input</th><th>Code/API name</th><th>Purpose</th></tr>
+        <tr><td>Cooling output from storage</td><td><code>Q_C_kWh</code>, <code>Q_C_dis_in_kWh</code>, <code>Q_C_sto_out_kWh</code></td><td>Cooling demand served by the storage/distribution side.</td></tr>
+        <tr><td>Storage temperatures</td><td><code>theta_C_sto_C</code>, <code>theta_C_gen_out_C</code>, <code>theta_C_sto_out_C</code>, <code>theta_C_sto_return_C</code></td><td>Calculate heat gains and generator-side sink temperature.</td></tr>
+        <tr><td>Ambient and location</td><td><code>location</code>, <code>ambient_temperature_C</code>, <code>conditioned_ambient_temperature_C</code></td><td>Defines the surrounding temperature for storage heat gains.</td></tr>
+        <tr><td>Heat-loss coefficients</td><td><code>H_C_sto_tot_ls_W_K</code>, <code>H_C_sto_out_ls_W_K</code>, <code>H_C_sto_in_ls_W_K</code></td><td>Standing and loop heat gains into chilled storage.</td></tr>
+        <tr><td>Pump data</td><td><code>input_pump_power_kW</code>, <code>output_pump_power_kW</code>, <code>input_pump_flow_m3_h</code>, <code>output_pump_flow_m3_h</code></td><td>Storage pump auxiliary electricity.</td></tr>
+      </table>
+
+      <h3>Cooling Generation: <code>CoolingGenerationSystemCalculator</code></h3>
+      <table>
+        <tr><th>Input</th><th>Code/API name</th><th>Purpose</th></tr>
+        <tr><td>Cooling demand to generator</td><td><code>Q_C_kWh</code>, <code>Q_C_sto_in_kWh</code>, <code>Q_C_gen_in_req_kWh</code></td><td>Cooling energy that must be removed by the generator.</td></tr>
+        <tr><td>Required evaporator outlet</td><td><code>theta_C_gen_out_req_C</code>, <code>T_C_sink_C</code></td><td>Cooling performance-map sink temperature.</td></tr>
+        <tr><td>Heat rejection/source temperature</td><td><code>T_ext</code>, <code>T_C_source_C</code>, <code>heat_rejection_type</code></td><td>Cooling performance-map source temperature and heat-rejection audit output.</td></tr>
+        <tr><td>Product performance map</td><td><code>cooling_performance_map</code> with <code>source_temperature_C</code>, <code>sink_temperature_C</code>, <code>capacity_kW</code>, <code>eer</code></td><td>Cooling capacity and EER interpolation. The examples build this map from EN 14511/EN 14825 rating data by default; see <code>docs/performance_14511_14825_audit.html</code>.</td></tr>
+        <tr><td>Part-load correction</td><td><code>part_load_performance_method</code>, <code>part_load_degradation_coefficient</code></td><td>Optional EN 14825 correction from full-load EER to EERbin for air-to-water operation.</td></tr>
+        <tr><td>Fallback product data</td><td><code>nominal_capacity_kW</code>, <code>nominal_eer</code></td><td>Used only when a performance map is not provided.</td></tr>
+        <tr><td>Auxiliary inputs</td><td><code>control_power_kW</code>, <code>additional_auxiliary_power_kW</code>, <code>p_hr_el_dry</code>, <code>p_hr_el_wet</code></td><td>Cooling generator auxiliary electricity.</td></tr>
+      </table>
+    </section>
+
+    <section id="formulas">
+      <h2>Main Calculation Formulas</h2>
+
+      <h3>EN 16798-9 Cooling Operating Conditions</h3>
+      <p>Code: <code>CoolingSystemCalculator._distribution_flow_temperature()</code></p>
+      <div class="formula">CONST: theta_C_dis_in_flw_req = theta_C_dis_flw_set</div>
+      <div class="formula">ODA_COMP: theta_C_dis_in_flw_req = clip(f_e * theta_e + delta_theta_off, theta_min, theta_max)</div>
+      <p>Code: <code>CoolingSystemCalculator._volume_flow()</code> and <code>_return_temperature()</code></p>
+      <div class="formula">variable flow: q_V_C_dis = q_V_C_dis_des * Phi_C / Phi_C_des</div>
+      <div class="formula">fallback flow: q_V_C_dis = Q_C / (1.16 * DeltaT_des * t)</div>
+      <div class="formula">theta_C_dis_out_ret_req = theta_C_dis_in_flw_req + Q_C / (1.16 * q_V_C_dis * t)</div>
+      <p>Code: <code>CoolingSystemCalculator._simulate()</code></p>
+      <div class="formula">Q_C_gen_in_req = Q_C_dis_out_tot_req + Q_C_dis_ls_simplified + f_wat_C_aux_dis * W_C_aux_dis_simplified</div>
+
+      <h3>EN 16798-15 Cooling Storage</h3>
+      <p>Code: <code>CoolingStorageSystemCalculator._simulate()</code></p>
+      <div class="formula">Q_C_sto_out_ls = H_C_sto_out_ls * max(theta_amb - theta_C_gen_out, 0) * t / 1000</div>
+      <div class="formula">Q_C_sto_in_ls = H_C_sto_in_ls * max(theta_amb - theta_C_sto_out, 0) * t / 1000</div>
+      <div class="formula">Q_C_sto_ls = H_C_sto_tot_ls * max(theta_amb - theta_C_sto, 0) * t / 1000</div>
+      <div class="formula">Q_C_sto_ls_tot = Q_C_sto_out_ls + Q_C_sto_in_ls + Q_C_sto_ls</div>
+      <p>Code: <code>CoolingStorageSystemCalculator._pump_runtime()</code></p>
+      <div class="formula">t_pump = min(Q_C / (1.16 * q_V_pump * DeltaT_pump), t_step)</div>
+      <div class="formula">W_C_sto_aux = t_pump_in * P_pump_in + t_pump_out * P_pump_out</div>
+      <div class="formula">Q_C_sto_in = Q_C_sto_out + Q_C_sto_ls_tot + W_C_sto_aux_to_medium</div>
+
+      <h3>EN 16798-13 Cooling Generation</h3>
+      <p>Code: <code>CoolingGenerationSystemCalculator._simulate()</code> and <code>_capacity_and_eer()</code></p>
+      <div class="formula">theta_C_gen_out = max(theta_C_gen_out_req, theta_C_gen_out_limit)</div>
+      <div class="formula">Q_C_gen_in_max = capacity_kW(theta_cond_in, theta_C_gen_out) * t * f_op_C</div>
+      <div class="formula">Q_C_gen_in = Q_C_free + Q_C_mechanical + Q_C_backup</div>
+      <div class="formula">f_C_PL = Q_C_mechanical / Q_C_gen_in_max</div>
+      <div class="formula">E_C_gen_el_in = Q_C_mechanical / EER(theta_cond_in, theta_C_gen_out)</div>
+      <div class="formula">EN 14825 active: EER_C_gen = EER_C_gen_full_load * CR / (Cd * CR + (1 - Cd))</div>
+      <div class="formula">Q_C_gen_out = Q_C_gen_in + E_C_gen_el_in</div>
+      <div class="formula">E_C_total = E_C_gen_el_in + E_C_backup_in + W_C_aux_gen</div>
+      <div class="formula">SEER_C_gen = Q_C_gen_in / E_C_total</div>
+    </section>
+
+    <section id="outputs">
+      <h2>Main Outputs</h2>
+      <table>
+        <thead>
+          <tr><th>File or object</th><th>Content</th><th>Audit Use</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>CoolingSystemSimulationResult.timeseries</code></td><td><code>Q_C_dis_out_tot_req_kWh</code>, <code>theta_C_gen_out_req_C</code>, <code>theta_C_dis_in_flw_req_C</code>, <code>theta_C_dis_out_ret_req_C</code>, <code>q_V_C_dis_m3_h</code>, <code>Q_C_gen_in_req_kWh</code></td><td>Check EN 16798-9 handoff and operating temperatures hour by hour.</td></tr>
+          <tr><td><code>CoolingStorageSimulationResult.timeseries</code></td><td><code>Q_C_sto_out_kWh</code>, <code>Q_C_sto_ls_tot_kWh</code>, <code>W_C_sto_aux_kWh</code>, <code>Q_C_sto_in_kWh</code>, storage temperatures and recoverable terms</td><td>Check cooling storage heat gains and pump energy.</td></tr>
+          <tr><td><code>CoolingGenerationSimulationResult.timeseries</code></td><td><code>Q_C_gen_in_req_kWh</code>, <code>Q_C_gen_in_kWh</code>, <code>E_C_gen_el_in_kWh</code>, <code>W_C_aux_gen_kWh</code>, <code>E_C_total_kWh</code>, <code>EER_C_gen</code>, <code>EER_C_gen_full_load</code>, <code>f_C_PL</code>, <code>f_C_PLF</code></td><td>Check cooling capacity, EN 14825 part-load operation, EER, electricity and unmet load.</td></tr>
+          <tr><td><code>cooling_16798_9_summary.csv</code></td><td>Annual cooling request, mean chilled-water temperatures and mean flow.</td><td>Check annual EN 16798-9 outputs.</td></tr>
+          <tr><td><code>cooling_storage_16798_15_summary.csv</code></td><td>Annual storage heat gains, pump electricity, generator-side cooling input and storage expenditure factor.</td><td>Check annual EN 16798-15 outputs.</td></tr>
+          <tr><td><code>cooling_generation_16798_13_summary.csv</code></td><td>Annual cooling removed, electricity, rejected heat, auxiliaries, SEER, mean EER and part load.</td><td>Check annual EN 16798-13 outputs.</td></tr>
+          <tr><td><code>combined_generation_summary.csv</code></td><td>Heating/DHW heat-pump summary plus EN 16798-13 cooling generator summary.</td><td>Check the combined annual generator boundary used by the index and Sankey.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Visual Outputs</h3>
+      <table>
+        <tr><th>Visual file</th><th>What to inspect</th></tr>
+        <tr><td><code>visuals/08_cooling_16798_9_operating_conditions.html</code></td><td>Cooling request, generator-side request, flow and return temperatures, volume flow.</td></tr>
+        <tr><td><code>visuals/09_cooling_storage_16798_15.html</code></td><td>Cooling storage output/input balance, heat gains, storage pump electricity, storage/ambient temperature.</td></tr>
+        <tr><td><code>visuals/10_cooling_generation_16798_13_timeseries.html</code></td><td>Daily cooling generation balance, electricity, EER, part-load and heat-rejection temperature.</td></tr>
+        <tr><td><code>visuals/11_cooling_generation_16798_13_bins.html</code></td><td>Cooling generation by outdoor-temperature bin, full-load EER, part-load-corrected EER, part-load factor and capacity.</td></tr>
+      </table>
+    </section>
+
+    <section id="run">
+      <h2>Run And Inspect</h2>
+      <p>Default full path with EN 16798 cooling modules:</p>
+      <pre><code>python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path full
+python examples/heat_pump_15316_4_2_example.py --scenario bolzano --calculation-path full</code></pre>
+      <p>Useful comparison paths:</p>
+      <pre><code>python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path no-cooling-storage
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path heat-pump-cooling
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path simple</code></pre>
+      <p>
+        Open the generated <code>inspection_index.html</code> in the scenario
+        output folder. The default folders are:
+      </p>
+      <pre><code>examples/outputs/heat_pump_15316_4_2_athens/inspection_index.html
+examples/outputs/heat_pump_15316_4_2_bolzano/inspection_index.html</code></pre>
+    </section>
+
+    <section id="limits">
+      <h2>Known Limits And Audit Notes</h2>
+      <ul>
+        <li>EN 16798-9 is implemented as the connector for water-based cooling operating temperatures and flow; detailed room emission remains in EN 15316-2 and pipe/pump distribution remains in EN 15316-3.</li>
+        <li>EN 16798-15 is implemented for chilled-water buffer storage with steady hourly heat gains. Ice and PCM latent state tracking are not modelled in this first implementation.</li>
+        <li>EN 16798-13 currently implements compression cooling generation. Absorption, adsorption, desiccant and evaporative cooling generators are outside the implemented scope.</li>
+        <li>Example defaults are realistic demonstration assumptions for 120 m2 residential cases. Project-grade studies should replace them with project geometry, pump data, storage product data, national annex values and manufacturer performance maps.</li>
+        <li>The older reversible heat-pump cooling branch remains available through <code>--calculation-path heat-pump-cooling</code> or <code>--cooling-generation-method heat-pump-simple</code> for comparison with previous outputs.</li>
+      </ul>
+      <div class="warning">
+        The standards use module boundaries and sign conventions that can look
+        surprising in a building-energy time series. In these cooling modules,
+        positive <code>Q_C</code> means useful cooling removed from the space or
+        system, while recoverable heat gains on the cooling side are reported
+        with negative sign where the standard applies that convention.
+      </div>
+      <p class="link-small">
+        Related audit pages:
+        <a href="emission_15316_2_audit.html">EN 15316-2 emission</a>,
+        <a href="distribution_15316_3_audit.html">EN 15316-3 distribution</a>,
+        <a href="storage_15316_5_audit.html">EN 15316-5 storage</a>,
+        <a href="heat_pump_15316_4_2_audit.html">EN 15316-4-2 heat pump</a>.
+      </p>
+    </section>
+  </main>
+</body>
+</html>

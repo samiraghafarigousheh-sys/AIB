@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EN 12831-3 DHW Implementation Audit</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; color: #1f2933; line-height: 1.5; }
+    h1, h2, h3 { color: #102a43; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0 28px; }
+    th, td { border: 1px solid #d7dde5; padding: 8px 10px; vertical-align: top; }
+    th { background: #f3f6fa; text-align: left; }
+    code { background: #eef2f7; padding: 1px 4px; border-radius: 4px; }
+    .note { background: #fff8e5; border: 1px solid #f0d98c; padding: 12px 14px; border-radius: 6px; }
+    .formula { font-family: Consolas, monospace; background: #f8fafc; border: 1px solid #d7dde5; padding: 10px 12px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>EN 12831-3:2017 DHW Implementation Audit</h1>
+
+  <p>
+    This page maps the domestic hot-water energy-need calculation in
+    <code>src/pybuildingenergy/source/DHW.py</code> to BS EN 12831-3:2017.
+    It is intended to be read together with the standard, the code and the
+    generated example outputs.
+  </p>
+
+  <div class="note">
+    <strong>Scope.</strong>
+    The implementation now covers both EN 12831-3 DHW energy-need
+    characterization and the DHW system design-heat-load/sizing procedure. The
+    sizing calculator builds the one-minute needs curve, calculates storage
+    switch points, storage/distribution losses, heat-generator time lag,
+    effective reheating power and the supply curve. Distribution, storage and
+    generation losses for the annual simulation are still calculated downstream
+    by EN 15316-3, EN 15316-5 and EN 15316-4-2.
+  </div>
+
+  <h2>Implemented Standard Coverage</h2>
+  <table>
+    <tr><th>Standard location</th><th>Implemented item</th><th>Code location</th></tr>
+    <tr>
+      <td>Clause 6.3 input data</td>
+      <td>DHW volume, floor area, number of units/persons, hourly fractions, draw and cold-water temperatures, building category and calendar.</td>
+      <td><code>Volume_and_energy_DHW_calculation()</code> arguments</td>
+    </tr>
+    <tr>
+      <td>Clause 6.5.1</td>
+      <td>Hourly draw/load profiles are accepted and normalized by day type. The heat-pump examples use EN 12831-3 Annex B Table B.2 relative hourly volume profiles.</td>
+      <td><code>dhw_annex_b_table_b2_hourly_fractions()</code>, <code>Volume_and_energy_DHW_calculation()</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5.2 and Formula (19)</td>
+      <td>DHW energy need from delivered volume, water density, specific heat capacity and temperature difference.</td>
+      <td><code>Q_W_nd_d = V_W_nd_d * WATER_DENSITY * WATER_SPECIFIC_HEAT_CAPACITY * deltaT</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.2.3 and Clause 6.4.3.3</td>
+      <td>One-minute needs and supply curves for checking DHW design storage and reheating power.</td>
+      <td><code>DHWDesignLoadCalculator.run_timeseries()</code></td>
+    </tr>
+    <tr>
+      <td>Formulas (4), (5), (10)</td>
+      <td>Maximum storage capacity, minimum mixed-storage capacity and switch-on residual capacity.</td>
+      <td><code>_storage_capacity_kWh()</code>, <code>DHWDesignLoadCalculator._simulate_supply_curve()</code></td>
+    </tr>
+    <tr>
+      <td>Formulas (6), (8), (9)</td>
+      <td>Storage standby losses and detailed or simplified DHW distribution losses on the design day. Explicit product/design standby-loss inputs override the Annex B default.</td>
+      <td><code>_storage_loss_kWh_min()</code>, <code>_distribution_loss_kWh_min()</code></td>
+    </tr>
+    <tr>
+      <td>Formulas (11), (12)</td>
+      <td>Heat-generator and distribution time lag, using supplied product data or Annex B defaults.</td>
+      <td><code>_time_lag_min()</code></td>
+    </tr>
+    <tr>
+      <td>Formulas (13), (14), (15), (16), (17)</td>
+      <td>Effective reheating power and minute reheat energy for loading and mixed storage systems.</td>
+      <td><code>_effective_power_kW()</code>, <code>_mixed_storage_time_constant_min()</code></td>
+    </tr>
+    <tr>
+      <td>Formula (18)</td>
+      <td>Direct-flow DHW design heat load with no storage volume.</td>
+      <td><code>_simulate_direct_flow()</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5.2.4 and Formulas (20), (21)</td>
+      <td>Daily volume from liters per person/day or liters per activity unit/day.</td>
+      <td><code>calc_V_w_day_through_V_w_p_day()</code> and Table B.4 path</td>
+    </tr>
+    <tr>
+      <td>Annex B, Formulas (B.1)-(B.4)</td>
+      <td>Residential equivalent-person calculation for single-family, attached-house and apartment dwelling cases.</td>
+      <td><code>calc_V_w_day_through_V_w_p_day()</code></td>
+    </tr>
+    <tr>
+      <td>Annex B, Tables B.3, B.4, B.5</td>
+      <td>Informative default usage energy, activity volume and residential liters/person/day data.</td>
+      <td><code>table_B_3</code>, <code>table_B_4</code>, <code>table_B_5_modified</code></td>
+    </tr>
+    <tr>
+      <td>Annex B, Table B.2</td>
+      <td>Relative hourly hot-water volume profile. The examples normalize the rounded tabular percentages to fractions summing to 1.0 for each day type.</td>
+      <td><code>dhw_annex_b_table_b2_hourly_fractions()</code> in the heat-pump example</td>
+    </tr>
+    <tr>
+      <td>Annex B, Table B.6</td>
+      <td>Default draw temperature of 42 deg C is used by the examples; cold water can be user supplied.</td>
+      <td><code>make_dhw_profile()</code> in the heat-pump example</td>
+    </tr>
+    <tr>
+      <td>Annex B, Table B.8</td>
+      <td>Default storage standby loss <code>q_sb,sto</code> is linearly interpolated by storage volume when no explicit <code>standby_loss_kWh_per_day</code> or <code>q_sb_sto_kWh_d</code> is supplied.</td>
+      <td><code>_annex_b_standby_loss_kWh_d()</code>, <code>DHWDesignLoadCalculator._standby_loss_kWh_d_for_volume()</code></td>
+    </tr>
+  </table>
+
+  <h2>Main Formulas</h2>
+
+  <h3>Residential Equivalent Persons</h3>
+  <p>
+    For residential dwellings the standard derives a maximum equivalent-person
+    count from useful or habitable floor area, then applies the reduced
+    equivalent-person expression for larger dwellings.
+  </p>
+  <div class="formula">
+    n_P_eq = n_P_eq_max if n_P_eq_max &lt; 1.75 else 1.75 + 0.3 * (n_P_eq_max - 1.75)
+  </div>
+  <p>Code: <code>calc_V_w_day_through_V_w_p_day()</code></p>
+
+  <h3>Daily Delivered DHW Volume</h3>
+  <p>
+    For the table method, liters per person per day are taken from the selected
+    residential typology and multiplied by the equivalent-person count. The
+    reference volume is then corrected from reference hot/cold temperatures to
+    the requested draw temperature.
+  </p>
+  <div class="formula">
+    V_W_nd_d = V_ref * (theta_h_ref - theta_c_ref) / (theta_draw - theta_c_ref)
+  </div>
+  <p>Code: <code>Volume_and_energy_DHW_calculation()</code></p>
+
+  <h3>Daily Energy Need</h3>
+  <p>The delivered volume is converted to energy using water density, specific heat capacity and the draw-to-cold-water temperature difference.</p>
+  <div class="formula">
+    Q_W_nd_d = V_W_nd_d * rho_w * c_w * (theta_draw - theta_cold)
+  </div>
+  <p>Code: <code>Volume_and_energy_DHW_calculation()</code></p>
+
+  <h3>Hourly Allocation</h3>
+  <p>
+    Hourly fractions for workdays, weekends and holidays are normalized over the
+    annual calendar so the sum of hourly energy equals the annual DHW energy
+    need.
+  </p>
+  <div class="formula">
+    f_x_avg = total_days / (n_workdays * sum_x_workday + n_weekends * sum_x_weekend + n_holidays * sum_x_holiday)
+  </div>
+  <p>Code: <code>x_q_h_i_coor</code>, <code>Q_W_nd_h_i</code> and <code>hourly_cons_energy</code></p>
+
+  <h3>Storage Capacity and Switch Points</h3>
+  <div class="formula">
+    Q_sto,max = V_sto * rho_w * c_w * (theta_sto,max - theta_cold) * f_l<br>
+    Q_sto,on = Q_sto,max * (1 - h_sensor / h_sto)<br>
+    Q_sto,min = V_sto * rho_w * c_w * (theta_draw - theta_cold) * f_l * (1 - h_sensor / (2 * h_sto))
+  </div>
+  <p>
+    <code>Q_sto,min</code> is used for mixed storage systems. For loading
+    storage systems the minimum margin is zero, following Clause 6.4.2.4.2.
+  </p>
+
+  <h3>Losses, Lag and Effective Reheat</h3>
+  <p>
+    The DHW design calculator first looks for explicit project or product data
+    via <code>standby_loss_kWh_per_day</code> or <code>q_sb_sto_kWh_d</code>.
+    If neither is provided, <code>q_sb,sto</code> is interpolated from Annex B
+    Table B.8 for the active storage volume. For example, 180 l gives
+    <code>1.35 + (180 - 150) / (200 - 150) * (1.56 - 1.35) = 1.476 kWh/day</code>.
+  </p>
+  <div class="formula">
+    Q_W,sto,t = q_sb,sto * (theta_sto,max - theta_a) / 45 / 1440<br>
+    Q_W,dis,t = sum(U_dis,j * l_dis,j * (theta_m,j - theta_a,j)) / 60000<br>
+    t_lag = t_lag,HG + t_lag,dis<br>
+    Phi_eff = Phi_N - Phi_W,sto - Phi_W,dis
+  </div>
+  <p>
+    For mixed storage systems the effective heat-exchanger power is reduced as
+    the mean storage temperature approaches the charging temperature, using the
+    exponential storage-temperature expression in Formula (15).
+  </p>
+
+  <h3>Supply-Curve Criterion</h3>
+  <div class="formula">
+    margin_t = Q_sto,residual,t - Q_sto,min
+  </div>
+  <p>
+    The design is reported as satisfied when the minimum margin over the
+    one-minute representative design day is non-negative within the configured
+    tolerance. With <code>--dhw-sizing-mode size_storage</code>, the example
+    increases DHW storage volume until this criterion is met.
+  </p>
+
+  <h2>Example Inputs</h2>
+  <table>
+    <tr><th>Input</th><th>Athens/Greece and Bolzano/Italy examples</th></tr>
+    <tr><td>Useful floor area</td><td><code>net_floor_area = 120 m2</code>; this is the useful floor area over two floors, not the footprint.</td></tr>
+    <tr><td>Footprint</td><td><code>footprint_area = 60 m2</code>; roof and ground slab areas use this value.</td></tr>
+    <tr><td>Calendar</td><td>Scenario-specific Workalendar country: Greece for Athens, Italy for Bolzano.</td></tr>
+    <tr><td>Residential DHW method</td><td><code>building_type_B5 = "Dwelling"</code>, <code>residential_typology = "residential_building - simple housing - AVG"</code>, <code>calculation_method = "table"</code>.</td></tr>
+    <tr><td>Hourly DHW profile</td><td>Both residential examples use the EN 12831-3 Annex B Table B.2 <code>single_family_dwelling</code> profile for workdays, weekends and holidays. The same profile is used because Table B.2 is category-based; the Greece/Italy calendars still determine the day counts.</td></tr>
+    <tr><td>Temperatures</td><td>42 deg C draw temperature, 60 deg C hot reference, 13.5 deg C cold reference, scenario-specific cold-water temperature.</td></tr>
+    <tr><td>DHW sizing method</td><td>Default <code>--dhw-design-method en12831-3</code> and <code>--dhw-sizing-mode size_storage</code>. The selected storage volume is passed to EN 15316-5.</td></tr>
+    <tr><td>DHW storage type</td><td>The examples use an EN 12831-3 loading-storage design check, which is typical for storage systems where reheating power is available to the DHW system without a mixed-storage minimum reserve. The selected tank volume is then passed to the single-volume EN 15316-5 storage-energy calculation.</td></tr>
+    <tr><td>DHW storage control sensor</td><td>The example switch-on sensor is placed at <code>h_sensor / h_sto = 0.35</code>. For loading-storage systems this controls the EN 12831-3 switch-on residual capacity; the minimum reserve is zero.</td></tr>
+  </table>
+
+  <h2>Outputs</h2>
+  <table>
+    <tr><th>Returned item</th><th>Meaning</th></tr>
+    <tr><td><code>yearly_cons</code></td><td>Annual DHW energy need in kWh.</td></tr>
+    <tr><td><code>V_W_nd_d</code></td><td>Daily delivered DHW volume in m3/day.</td></tr>
+    <tr><td><code>monthly_volume</code>, <code>yearly_volume</code></td><td>Monthly and annual delivered DHW volume.</td></tr>
+    <tr><td><code>Q_W_nd_d</code></td><td>Daily DHW energy need in kWh/day.</td></tr>
+    <tr><td><code>V_W_nd_h_i</code>, <code>hourly_cons_volume</code></td><td>Hourly volume profile by day type and calendar-expanded hourly annual series.</td></tr>
+    <tr><td><code>hourly_cons_energy</code></td><td>Calendar-expanded hourly annual DHW energy series used by the heat-pump examples.</td></tr>
+    <tr><td><code>q_sb_sto_kWh_d</code>, <code>q_sb_sto_source</code></td><td>Storage standby loss used in the EN 12831-3 design-day check and whether it came from explicit input or Annex B Table B.8.</td></tr>
+    <tr><td><code>DHWDesignSimulationResult.timeseries</code></td><td>Representative one-minute design day: needs curve, supply curve, residual storage, switch points, losses, reheat energy and margin.</td></tr>
+    <tr><td><code>DHWDesignSimulationResult.summary</code></td><td>Design-day need, selected storage volume, selected generator power, design flow, switch-on/off/min/max capacities, time lag, effective power and supply-curve pass/fail.</td></tr>
+  </table>
+
+  <h2>Optional External References</h2>
+  <p>
+    The implementation uses EN 12831-3 Annex B defaults where no product or
+    national data are provided. For project-specific direct-flow pipe sizing and
+    fixture design-flow methods, EN 806-3 can be used as an input source. For
+    manufacturer storage standby-loss declarations, EN 12897 or product
+    regulations can provide <code>q_sb,sto</code>. For single-family tapping
+    programs, EN 13203-2 can be used instead of the Annex B/default hourly
+    profile.
+  </p>
+
+  <h2>Files To Inspect</h2>
+  <ul>
+    <li><code>src/pybuildingenergy/source/DHW.py</code>: EN 12831-3 DHW energy-need and design-load/supply-curve calculation.</li>
+    <li><code>src/pybuildingenergy/source/functions.py</code>: Annex B tabular input data.</li>
+    <li><code>examples/heat_pump_15316_4_2_example.py</code>: scenario calendars, useful floor area, Annex B Table B.2 hourly profile and cold-water temperature.</li>
+    <li><code>examples/outputs/heat_pump_15316_4_2_*/iso52016_loads_with_dhw.csv</code>: hourly DHW load handed to the system chain.</li>
+    <li><code>examples/outputs/heat_pump_15316_4_2_*/dhw_12831_3_design_timeseries.csv</code>: one-minute design-day supply-curve table.</li>
+    <li><code>examples/outputs/heat_pump_15316_4_2_*/dhw_12831_3_design_summary.csv</code>: DHW sizing summary passed to later standards.</li>
+    <li><code>examples/outputs/heat_pump_15316_4_2_*/building_geometry_summary.csv</code>: useful floor area, footprint, roof and slab area sanity check.</li>
+  </ul>
+</body>
+</html>

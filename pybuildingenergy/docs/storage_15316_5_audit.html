@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EN 15316-5 Storage Implementation Audit</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.55; margin: 32px; color: #1f2933; }
+    h1, h2 { color: #17202a; }
+    code, pre { background: #f4f6f8; border-radius: 4px; }
+    code { padding: 1px 4px; }
+    pre { padding: 12px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0 28px; }
+    th, td { border: 1px solid #d7dde5; padding: 8px 10px; vertical-align: top; }
+    th { background: #eef2f6; }
+    .formula { font-family: Consolas, monospace; background: #f8fafc; border-left: 4px solid #6b8fb3; padding: 10px 12px; margin: 10px 0; }
+    .note { background: #fff8e5; border: 1px solid #f1d28a; padding: 10px 12px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>EN 15316-5:2017 Heating/DHW Storage Implementation Audit</h1>
+  <p>
+    This page maps the implemented storage module to
+    <code>BS EN 15316-5:2017</code>, using the local file
+    <code>BS EN 15316-5_2017 Energy performance of buildings. Method for calculation of system energy requirements and system.pdf</code>.
+    The implemented scope is Method B, the single-volume storage model, for
+    space-heating and domestic hot water storage systems. Cooling storage is not
+    in the scope of EN 15316-5.
+  </p>
+
+  <h2>Implemented Boundary</h2>
+  <p>
+    In the example chain, EN 15316-5 is placed between distribution and
+    generation:
+  </p>
+  <pre><code>ISO 52016 sensible needs and EN 12831-3 DHW needs
+  -> EN 15316-2 emission
+  -> EN 15316-3 distribution
+  -> EN 15316-5 heating/DHW storage
+  -> EN 15316-4-2 heat pump generation</code></pre>
+  <p>
+    Therefore <code>Q_H_sto_out_kWh</code> and <code>Q_W_sto_out_kWh</code> are
+    the loads requested downstream of the storage. The module adds storage
+    losses, subtracts auxiliary heat recovered in the medium, and returns
+    <code>Q_H_sto_in_kWh</code> and <code>Q_W_sto_in_kWh</code> as the generator-side
+    input loads.
+  </p>
+
+  <h2>Clause And Formula Map</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Standard location</th>
+        <th>Implemented item</th>
+        <th>Code location</th>
+        <th>Output columns</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Clause 6.1, Tables 3 and 4</td>
+        <td>Output data for storage input, storage output, heat losses, auxiliary energy and temperatures.</td>
+        <td><code>StorageSystemCalculator._simulate_service()</code> and <code>_summarize()</code></td>
+        <td><code>Q_H_sto_in_kWh</code>, <code>Q_W_sto_in_kWh</code>, <code>Q_*_sto_ls_kWh</code>, <code>W_*_sto_aux_kWh</code>, <code>theta_*_sto_set_C</code></td>
+      </tr>
+      <tr>
+        <td>Clause 6.4.1 and Annex C.2</td>
+        <td>Method B, single homogeneous volume, used when storage is controlled at constant temperature during the step.</td>
+        <td><code>StorageSystemCalculator</code> module design</td>
+        <td>One heating storage state and one DHW storage state per time step.</td>
+      </tr>
+      <tr>
+        <td>Clause 6.4.5, Formula (30)</td>
+        <td>Storage thermal losses from standby loss coefficient, adaptation factor, connection factor, setpoint, ambient and time.</td>
+        <td><code>_thermal_loss()</code></td>
+        <td><code>Q_H_sto_ls_kWh</code>, <code>Q_W_sto_ls_kWh</code></td>
+      </tr>
+      <tr>
+        <td>Clause 6.4.6, Formulae (31) to (33)</td>
+        <td>Storage pump operation time and auxiliary electricity from transferred energy, flow rate, temperature difference and pump power.</td>
+        <td><code>_pump_runtime()</code> and <code>_pump_auxiliary()</code></td>
+        <td><code>t_*_sto_pmp_in_h</code>, <code>t_*_sto_pmp_out_h</code>, <code>W_*_sto_aux_kWh</code></td>
+      </tr>
+      <tr>
+        <td>Clause 6.4.7, Formulae (34) to (37)</td>
+        <td>Auxiliary heat recovered in the medium, recoverable auxiliary heat, recoverable storage losses and total recoverable losses.</td>
+        <td><code>_simulate_service()</code></td>
+        <td><code>Q_*_sto_aux_rvd_kWh</code>, <code>Q_*_sto_aux_rbl_kWh</code>, <code>Q_*_sto_ls_rbl_kWh</code>, <code>Q_*_sto_rbl_kWh</code></td>
+      </tr>
+      <tr>
+        <td>Annex A.2.8 and Annex B.2.8</td>
+        <td>Derivation of <code>H_sto_ls</code> from declared daily standby loss, or Annex B storage-type correlations.</td>
+        <td><code>_standby_loss_coefficient()</code> and <code>_annex_b_loss_coefficient()</code></td>
+        <td><code>H_H_sto_ls_W_K</code>, <code>H_W_sto_ls_W_K</code></td>
+      </tr>
+      <tr>
+        <td>Annex B.2.9</td>
+        <td>Default recovery factors: part of auxiliary energy transmitted to medium, part of thermal losses transmitted to room, standby-loss adaptation factor.</td>
+        <td><code>_service_options()</code></td>
+        <td><code>Q_*_sto_aux_rvd_kWh</code>, <code>Q_*_sto_ls_rbl_kWh</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Main Formulae</h2>
+  <p>Thermal storage losses, from Formula (30):</p>
+  <div class="formula">Q_sto_ls = H_sto_ls * f_sto_bac_acc * f_sto_dis_ls * max(theta_sto_set - theta_sto_amb, 0) * t_ci / 1000</div>
+
+  <p>Standby loss coefficient from a declared daily standby loss, following Annex A/B:</p>
+  <div class="formula">H_sto_ls = Q_stby_ls_ref * 1000 / (24 * (theta_sto_set_ref - theta_amb_ref))</div>
+
+  <p>Storage charging/output pump runtime, following the logic of Formulae (31) and (32):</p>
+  <div class="formula">t_pmp = Q_transferred / (rho_cp_water * Vdot_pmp * Delta_theta_pmp)</div>
+
+  <p>Auxiliary electricity, Formula (33):</p>
+  <div class="formula">W_sto_aux = t_input_pmp * P_input_pmp + t_output_pmp * P_output_pmp</div>
+
+  <p>Recoveries, Formulae (34) to (37):</p>
+  <div class="formula">Q_sto_aux_rvd = W_sto_aux * f_rvd_aux</div>
+  <div class="formula">Q_sto_aux_rbl = W_sto_aux * (1 - f_rvd_aux) * f_sto_m</div>
+  <div class="formula">Q_sto_ls_rbl = Q_sto_ls * f_sto_m</div>
+
+  <h2>Inputs</h2>
+  <table>
+    <thead>
+      <tr><th>Input</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>Q_H_kWh</code>, <code>Q_W_kWh</code></td><td>Heating and DHW loads requested at storage output. Distribution output aliases such as <code>Q_H_dis_in_kWh</code> and <code>Q_W_dis_in_kWh</code> are also accepted.</td></tr>
+      <tr><td><code>set_temperature_C</code></td><td>Storage setpoint temperature for the service.</td></tr>
+      <tr><td><code>ambient_temperature_C</code></td><td>Ambient temperature around the storage unit.</td></tr>
+      <tr><td><code>standby_loss_coefficient_W_K</code></td><td>Direct storage heat-loss coefficient.</td></tr>
+      <tr><td><code>standby_loss_kWh_per_day_ref</code></td><td>Alternative product-data input used to derive <code>H_sto_ls</code>.</td></tr>
+      <tr><td><code>connection_loss_factor</code></td><td>EN 15316-5 storage connection factor <code>f_sto_dis_ls</code>. The examples use 1.0 because EN 15316-3 already accounts for distribution losses.</td></tr>
+      <tr><td><code>input_pump_power_kW</code>, <code>input_pump_flow_m3_h</code>, <code>input_pump_deltaT_K</code></td><td>Storage charging pump power and operation parameters.</td></tr>
+      <tr><td><code>thermal_loss_room_fraction</code>, <code>auxiliary_to_medium_fraction</code></td><td>Recovery factors for recoverable room gains and recovered auxiliary heat in the medium.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Outputs</h2>
+  <ul>
+    <li><code>storage_15316_5_hourly_results.csv</code>: hourly output, losses, auxiliaries, recovery and temperature columns.</li>
+    <li><code>storage_15316_5_summary.csv</code>: annual totals and storage expenditure factors.</li>
+    <li><code>visuals/06_storage_15316_5_timeseries.html</code>: daily storage output/input, losses, pump electricity and temperatures.</li>
+    <li><code>visuals/07_storage_15316_5_monthly.html</code>: monthly storage balance and expenditure factors.</li>
+  </ul>
+
+  <h2>Example Commands</h2>
+  <pre><code>python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path full
+python examples/heat_pump_15316_4_2_example.py --scenario bolzano --calculation-path full
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path storage-only
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path emission-distribution
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path simple</code></pre>
+
+  <div class="note">
+    <strong>Implemented simplification:</strong> Method A stratified multi-volume
+    tank dynamics, storage backup control and solar storage iteration are not
+    implemented. For the present examples, Method B is the intended audit path:
+    a single storage volume held at a constant setpoint during the hourly step.
+  </div>
+</body>
+</html>

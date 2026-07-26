@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EN 15316-2 Emission System Implementation Audit</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.55; margin: 32px; color: #1f2933; }
+    code { background: #eef2f7; padding: 2px 5px; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; margin: 18px 0 28px; }
+    th, td { border: 1px solid #d7dde5; padding: 10px; vertical-align: top; }
+    th { background: #f3f6fa; text-align: left; }
+    .note { background: #f8fafc; border-left: 4px solid #607d9c; padding: 12px 16px; }
+  </style>
+</head>
+<body>
+  <h1>EN 15316-2:2017 Emission System Implementation Audit</h1>
+
+  <p>
+    This page maps the new emission-system code to
+    <strong>BS EN 15316-2:2017, Energy performance of buildings - Method for
+    calculation of system energy requirements and system efficiencies -
+    Part 2: Space emission systems (heating and cooling)</strong>.
+    It is intended for tandem review of the standard, code and generated CSV/HTML
+    outputs.
+  </p>
+
+  <h2>Scope In The Code</h2>
+  <p>
+    The implemented module is <code>src/pybuildingenergy/source/emission_15316_2.py</code>.
+    It covers the hourly calculation path for space-heating emission module
+    M3-5 and water-based space-cooling emission module M4-5. The examples place
+    it between ISO 52016 building needs and the EN 15316-4-2 heat-pump
+    generation calculation.
+  </p>
+
+  <h2>Main Inputs</h2>
+  <table>
+    <tr><th>Input</th><th>Code/API name</th><th>Standard role</th></tr>
+    <tr>
+      <td>Outdoor temperature</td>
+      <td><code>T_ext</code></td>
+      <td>External temperature used in the combined outside temperature term for hourly losses.</td>
+    </tr>
+    <tr>
+      <td>Baseline heating and cooling needs</td>
+      <td><code>Q_H_kWh</code>, <code>Q_C_kWh</code></td>
+      <td>Useful thermal output required in the room before emission effects.</td>
+    </tr>
+    <tr>
+      <td>Equivalent-setpoint recalculated needs</td>
+      <td><code>Q_H_em_out_inc_kWh</code>, <code>Q_C_em_out_inc_kWh</code></td>
+      <td>Hourly output recalculated after emitter/control temperature effects. The example obtains this with a second ISO 52016 run.</td>
+    </tr>
+    <tr>
+      <td>Initial internal temperatures</td>
+      <td><code>T_H_int_ini_C</code>, <code>T_C_int_ini_C</code></td>
+      <td>Reference internal temperatures for the hourly equivalent-temperature calculation.</td>
+    </tr>
+    <tr>
+      <td>Emitter/control temperature effects</td>
+      <td><code>stratification_K</code>, <code>control_K</code>, <code>radiation_K</code>, <code>hydraulic_balancing_K</code>, <code>room_automation_K</code></td>
+      <td>Terms summed into the hourly internal-temperature variation in clause 6.5.</td>
+    </tr>
+    <tr>
+      <td>Embedded emitter loss temperature term</td>
+      <td><code>embedded_K</code></td>
+      <td>Temperature term for losses to embedded structures or adjacent zones.</td>
+    </tr>
+    <tr>
+      <td>Auxiliary fan/control powers</td>
+      <td><code>fan_power_W</code>, <code>fan_count</code>, <code>control_power_W</code>, <code>control_count</code></td>
+      <td>Auxiliary electricity associated with emission devices.</td>
+    </tr>
+    <tr>
+      <td>Convective fraction</td>
+      <td><code>convective_fraction</code></td>
+      <td>Convective part of heat emitted to the room, reported for downstream comfort or heat-balance use.</td>
+    </tr>
+  </table>
+
+  <h2>Main Formula Mapping</h2>
+  <table>
+    <tr><th>Standard location</th><th>Implemented calculation</th><th>Code location</th><th>Output columns</th></tr>
+    <tr>
+      <td>Clause 5.1</td>
+      <td>Reports emission losses, auxiliary electricity, equivalent internal temperature and convective fraction.</td>
+      <td><code>EmissionSystemCalculator._summarize()</code></td>
+      <td><code>QH_em_ls_kWh</code>, <code>QC_em_ls_kWh</code>, <code>W_em_aux_kWh</code>, <code>theta_*_int_inc_mean_C</code>, <code>f*_em_conv</code></td>
+    </tr>
+    <tr>
+      <td>Clause 5.2</td>
+      <td>Uses increased heating and decreased cooling equivalent internal temperatures to represent emitter and control inefficiencies.</td>
+      <td><code>building_with_emission_setpoints()</code> in the example and <code>equivalent_*_setpoint_C()</code></td>
+      <td><code>Q_*_em_out_inc_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 16</td>
+      <td>Heating equivalent temperature is baseline plus variation; cooling equivalent temperature is baseline minus variation.</td>
+      <td><code>EmissionSystemCalculator._simulate_service()</code></td>
+      <td><code>theta_H_int_inc_C</code>, <code>theta_C_int_inc_C</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 17</td>
+      <td>Sums stratification, control accuracy, radiation, hydraulic balancing and room-automation terms.</td>
+      <td><code>EmissionSystemCalculator._service_options()</code></td>
+      <td><code>theta_*_int_inc_delta_K</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 20</td>
+      <td>Calculates embedded emission loss from equivalent output, embedded temperature term and the combined temperature difference.</td>
+      <td><code>EmissionSystemCalculator._simulate_service()</code></td>
+      <td><code>Q_H_emb_ls_kWh</code>, <code>Q_C_emb_ls_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 21a/21b</td>
+      <td>Heating uses outdoor temperature; cooling uses outdoor temperature plus the solar-gain temperature term.</td>
+      <td><code>EmissionSystemCalculator._simulate_service()</code></td>
+      <td><code>theta_H_e_comb_C</code>, <code>theta_C_e_comb_C</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 22/23</td>
+      <td>Total emission losses equal equivalent output minus baseline output plus embedded loss; emission input equals baseline output plus losses.</td>
+      <td><code>EmissionSystemCalculator._simulate_service()</code></td>
+      <td><code>Q_*_em_temp_effect_kWh</code>, <code>Q_*_em_ls_kWh</code>, <code>Q_*_em_in_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 26</td>
+      <td>Annual expenditure factor is annual emission input divided by annual baseline output.</td>
+      <td><code>EmissionSystemCalculator._summarize()</code></td>
+      <td><code>e_H_em_ls_an</code>, <code>e_C_em_ls_an</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.5, Eq. 27/28</td>
+      <td>Emission auxiliary electricity is fan/control power multiplied by operating hours.</td>
+      <td><code>EmissionSystemCalculator._simulate_service()</code></td>
+      <td><code>W_H_em_aux_kWh</code>, <code>W_C_em_aux_kWh</code></td>
+    </tr>
+  </table>
+
+  <h2>Example Integration</h2>
+  <p>
+    The examples in <code>examples/heat_pump_15316_4_2_example.py</code> run:
+  </p>
+  <ol>
+    <li>ISO 52016 at the normal heating and cooling setpoints.</li>
+    <li>ISO 52016 at the EN 15316-2 equivalent setpoints.</li>
+    <li><code>EmissionSystemCalculator.run_timeseries()</code> to calculate losses and auxiliaries.</li>
+    <li>EN 15316-4-2 heat-pump generation using <code>Q_H_em_in_kWh</code> and <code>Q_C_em_in_kWh</code> as the delivered space loads.</li>
+  </ol>
+  <p>
+    EN 15316-2 is the default example mode. To reproduce the earlier direct
+    ISO52016-to-heat-pump workflow, run the example with
+    <code>--emission-method simple</code>.
+  </p>
+
+  <h2>Generated Files</h2>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td><code>emission_15316_2_hourly_results.csv</code></td><td>Hourly baseline loads, equivalent loads, emission losses, auxiliary electricity and temperatures.</td></tr>
+    <tr><td><code>emission_15316_2_summary.csv</code></td><td>Annual heating/cooling emission losses, auxiliaries, equivalent temperature variations and expenditure factors.</td></tr>
+    <tr><td><code>visuals/02_emission_15316_2_timeseries.html</code></td><td>Daily time-series inspection of building needs, emission input loads, losses, auxiliaries and equivalent temperatures.</td></tr>
+    <tr><td><code>visuals/03_emission_15316_2_monthly.html</code></td><td>Monthly emission balance and expenditure-factor inspection.</td></tr>
+  </table>
+
+  <div class="note">
+    Annex B default values are used in the runnable examples for fan-coil
+    emission assumptions where the standard provides tabulated defaults. Project
+    studies should replace these with system-specific emitter, control, hydraulic
+    balancing and fan-power data.
+  </div>
+</body>
+</html>
