@@ -56,6 +56,34 @@ Branch: `claude/window-plus-dynamic-hce-anjro8`
 If the repo is private, clone with a personal access token:
 `https://<TOKEN>@github.com/samiraghafarigousheh-sys/AIB.git`
 
+### Baseline vs EnergyPlus
+
+`examples/baseline_vs_energyplus.py` runs the **unmodified** engine against
+EnergyPlus 24.1 on the same building, weather and schedules. It builds the IDF
+from `apt305_building.py`, so there is one source of truth for the inputs.
+
+```bash
+# install EnergyPlus, then
+python examples/baseline_vs_energyplus.py --audit-only          # alignment table + IDF
+python examples/baseline_vs_energyplus.py --energyplus /opt/ep/energyplus
+```
+
+It prints a **parameter alignment audit** before running. That audit is the
+point of the script: several ISO behaviours are invisible in the building
+dictionary, and three of them dominate the comparison.
+
+| Finding | Detail |
+| --- | --- |
+| **Internal gains ignore `full_load`** | `internal_gains()` returns ISO 16798-1 tabulated `q_int` for `building_type_class` × `a_use`, plus the neighbours' transferred gains. The dictionary says 16 W/m²; the engine uses **52.8 W/m²** (occupants 30.8, appliances 22.0, lighting **0.0**). Only the *profiles* are taken from the dictionary. |
+| **Neighbours are unconditioned buffers, not conditioned rooms** | `θ_ztu = (1−b_ztu)·θ_int + b_ztu·T_out`, with b_ztu = 0.73–0.93 here — so they mostly track **outdoor** air. Pinning them at a fixed 21 °C in EnergyPlus (as a naive IDF does) changes total energy by ~40×. |
+| **Control is on operative temperature** | ISO controls 0.5·T_air + 0.5·MRT; an EnergyPlus thermostat defaults to zone **air** temperature, which ran ~2 K cooler. |
+
+The script corrects all three — probing the engine for its real gain magnitudes
+and b_ztu values, then building the IDF from them — plus the frame fraction,
+surface film coefficient, radiant split, internal capacitance, daylight saving
+and day-of-week. Four differences remain irreducible (timestep, solar
+distribution, surface heat transfer algorithm, and the RC-vs-CTF split).
+
 ### Run it locally
 
 ```bash
