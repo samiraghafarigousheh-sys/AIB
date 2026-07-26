@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EN 15316-3 Distribution System Implementation Audit</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.55; margin: 32px; color: #1f2933; }
+    code { background: #eef2f7; padding: 2px 5px; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; margin: 18px 0 28px; }
+    th, td { border: 1px solid #d7dde5; padding: 10px; vertical-align: top; }
+    th { background: #f3f6fa; text-align: left; }
+    .note { background: #f8fafc; border-left: 4px solid #607d9c; padding: 12px 16px; }
+  </style>
+</head>
+<body>
+  <h1>EN 15316-3:2017 Distribution System Implementation Audit</h1>
+
+  <p>
+    This page maps the distribution-system code to
+    <strong>BS EN 15316-3:2017, Energy performance of buildings - Method for
+    calculation of system energy requirements and system efficiencies -
+    Part 3: Space distribution systems (DHW, heating and cooling)</strong>.
+  </p>
+
+  <h2>Scope In The Code</h2>
+  <p>
+    The implemented module is
+    <code>src/pybuildingenergy/source/distribution_15316_3.py</code>. It covers
+    hourly water-based distribution losses and circulation pump auxiliary energy
+    for heating, cooling and DHW distribution modules M3-6, M4-6 and M8-6.
+    In the heat-pump examples, DHW demand is prepared upstream with the
+    EN 12831-3 energy-need calculation documented in
+    <code>docs/dhw_12831_3_audit.html</code>.
+  </p>
+
+  <h2>Main Inputs</h2>
+  <table>
+    <tr><th>Input</th><th>Code/API name</th><th>Standard role</th></tr>
+    <tr>
+      <td>Downstream heating, cooling and DHW output</td>
+      <td><code>Q_H_kWh</code>, <code>Q_C_kWh</code>, <code>Q_W_kWh</code></td>
+      <td>Thermal output required after the distribution network.</td>
+    </tr>
+    <tr>
+      <td>Supply and return water temperatures</td>
+      <td><code>supply_temperature_C</code>, <code>return_temperature_C</code>, <code>dhw_temperature_C</code></td>
+      <td>Used to calculate the mean water temperature in the distribution system.</td>
+    </tr>
+    <tr>
+      <td>Pipe sections</td>
+      <td><code>pipe_sections</code>: <code>length_m</code>, <code>equivalent_length_m</code>, <code>linear_thermal_transmittance_W_mK</code>, <code>ambient_temperature_C</code>, <code>recoverable</code></td>
+      <td>Inputs to pipe heat-loss calculation and recoverable-loss split.</td>
+    </tr>
+    <tr>
+      <td>Pump hydraulic data</td>
+      <td><code>design_flow_m3_h</code>, <code>max_length_m</code>, <code>pressure_loss_per_m_kPa</code>, <code>additional_pressure_kPa</code>, <code>resistance_ratio</code></td>
+      <td>Inputs to hydraulic design power and distribution pressure drop.</td>
+    </tr>
+    <tr>
+      <td>Pump product/control data</td>
+      <td><code>pump_control_code</code>, <code>eei</code>, <code>pump_label_power_kW</code></td>
+      <td>Inputs to pump expenditure factor and auxiliary electricity.</td>
+    </tr>
+    <tr>
+      <td>Recoverable auxiliary fraction</td>
+      <td><code>recoverable_aux_fraction</code></td>
+      <td>Splits pump electricity into heat to the zone and heat recovered in the fluid.</td>
+    </tr>
+  </table>
+
+  <h2>Main Formula Mapping</h2>
+  <table>
+    <tr><th>Standard location</th><th>Implemented calculation</th><th>Code location</th><th>Output columns</th></tr>
+    <tr>
+      <td>Clause 6.1</td>
+      <td>Reports distribution thermal losses, recoverable losses, pump auxiliaries and recovered auxiliary heat.</td>
+      <td><code>DistributionSystemCalculator._summarize()</code></td>
+      <td><code>Q*_dis_ls_kWh</code>, <code>Q*_dis_rbl_kWh</code>, <code>W*_dis_aux_kWh</code>, <code>Q*_dis_aux_rvd_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.3, Eq. 1/2</td>
+      <td>Calculates mean water temperature from supply/return temperatures, or DHW temperature minus half the circulation return difference.</td>
+      <td><code>_mean_water_temperature()</code></td>
+      <td><code>theta_H_dis_mean_C</code>, <code>theta_C_dis_mean_C</code>, <code>theta_W_dis_mean_C</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.3, Eq. 7</td>
+      <td>Calculates pipe thermal losses from linear transmittance, temperature difference, length and operation time.</td>
+      <td><code>_thermal_losses()</code></td>
+      <td><code>Q_H_dis_ls_kWh</code>, <code>Q_C_dis_ls_kWh</code>, <code>Q_W_dis_ls_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.4, Eq. 17-19</td>
+      <td>Splits recoverable thermal losses according to sections located in conditioned spaces; cooling recoverable heat is reported with negative sign.</td>
+      <td><code>_thermal_losses()</code>, <code>_simulate_service()</code></td>
+      <td><code>Q_*_dis_th_rbl_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.5, Eq. 20/21</td>
+      <td>Calculates hydraulic design power from design pressure drop and flow; pressure drop can be provided directly or built from Annex B-style data.</td>
+      <td><code>_pump_auxiliary()</code>, <code>_design_delta_pressure()</code></td>
+      <td><code>P_*_hydr_des_kW</code>, <code>delta_p_*_des_kPa</code>, <code>V_*_des_m3_h</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.5, Eq. 22/23</td>
+      <td>Calculates hydraulic and electrical pump energy from design hydraulic power, part load, operation time and pump expenditure factor.</td>
+      <td><code>_pump_auxiliary()</code></td>
+      <td><code>W_*_dis_hydr_kWh</code>, <code>W_*_dis_aux_kWh</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.5, Eq. 24-28</td>
+      <td>Calculates the pump expenditure factor from control constants, part load, EEI, reference power or label power.</td>
+      <td><code>_pump_expenditure_factor()</code>, <code>_pump_efficiency_factor()</code></td>
+      <td><code>epsilon_*_dis</code></td>
+    </tr>
+    <tr>
+      <td>Clause 6.4.7, Eq. 32-35</td>
+      <td>Splits auxiliary electricity into recoverable heat to the zone and recovered heat to the fluid; cooling signs are negative.</td>
+      <td><code>_simulate_service()</code></td>
+      <td><code>Q_*_dis_aux_rbl_kWh</code>, <code>Q_*_dis_aux_rvd_kWh</code></td>
+    </tr>
+  </table>
+
+  <h2>Example Integration</h2>
+  <p>
+    The example script runs EN 15316-3 after EN 15316-2 by default. The heat
+    pump receives <code>Q_H_dis_in_kWh</code>, <code>Q_C_dis_in_kWh</code> and
+    <code>Q_W_dis_in_kWh</code> as generator-side loads.
+  </p>
+
+  <pre><code>python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path full
+python examples/heat_pump_15316_4_2_example.py --scenario bolzano --calculation-path emission-only
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path simple</code></pre>
+
+  <h2>Generated Files</h2>
+  <table>
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td><code>distribution_15316_3_hourly_results.csv</code></td><td>Hourly downstream output, pipe losses, pump electricity, recoverable heat, recovered auxiliary heat and generator-side distribution input.</td></tr>
+    <tr><td><code>distribution_15316_3_summary.csv</code></td><td>Annual heating, cooling and DHW distribution losses, auxiliaries, part-load means and distribution expenditure factors.</td></tr>
+    <tr><td><code>visuals/04_distribution_15316_3_timeseries.html</code></td><td>Daily distribution output/input loads, thermal losses, pump electricity and mean water temperatures.</td></tr>
+    <tr><td><code>visuals/05_distribution_15316_3_monthly.html</code></td><td>Monthly distribution balance and expenditure-factor inspection.</td></tr>
+  </table>
+
+  <div class="note">
+    The runnable examples use Annex B-style pipe-length and pump-control defaults
+    for a compact 120 m2 residential building. Project studies should replace
+    these assumptions with measured pipe lengths, insulation levels, pressure
+    drops, pump label data and operating schedules.
+  </div>
+</body>
+</html>

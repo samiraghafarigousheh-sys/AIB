@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EN 14511 / EN 14825 Product Performance Implementation Audit</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.55; margin: 32px; color: #1f2933; }
+    h1, h2, h3 { color: #102a43; }
+    code { background: #eef2f7; padding: 2px 5px; border-radius: 4px; }
+    pre { background: #f6f8fa; padding: 14px; overflow-x: auto; border: 1px solid #d7dde5; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0 24px; }
+    th, td { border: 1px solid #d7dde5; padding: 8px 10px; vertical-align: top; }
+    th { background: #eef2f7; }
+    .note { background: #fff8e5; border-left: 4px solid #d99a00; padding: 10px 14px; }
+  </style>
+</head>
+<body>
+  <h1>EN 14511 / EN 14825 Product Performance Implementation Audit</h1>
+  <p>
+    This page documents the product-performance layer used by the heat-pump
+    examples. It is designed so that the user can inspect the standard, the
+    code and the output files together.
+  </p>
+
+  <div class="note">
+    Scope note: the implementation normalizes EN 14511 rating points and applies
+    the EN 14825 part-load COP/EER correction used by the building-system
+    simulation. It does not yet calculate the complete regulatory SCOP/SEER
+    labelling procedure including thermostat-off, standby, crankcase-heater and
+    off-mode hours.
+  </div>
+
+  <h2>Standards Used</h2>
+  <table>
+    <tr><th>Standard</th><th>Used For</th><th>Implementation Location</th></tr>
+    <tr>
+      <td><code>BS EN 14511-1:2022</code></td>
+      <td>Terms for capacity, effective power input, COP, EER, rated capacity and rating conditions.</td>
+      <td><code>HeatPumpPerformanceDataCalculator._normalize_points()</code></td>
+    </tr>
+    <tr>
+      <td><code>BS EN 14511-2:2022</code></td>
+      <td>Air-to-water rating conditions. The examples use the heating tables for water outlet temperature levels and the cooling table for chilled-water operation.</td>
+      <td><code>heat_pump_performance_data()</code> in <code>examples/heat_pump_15316_4_2_example.py</code></td>
+    </tr>
+    <tr>
+      <td><code>BS EN 14825:2022</code></td>
+      <td>Part-load rating points, capacity ratio and COPbin/EERbin degradation correction for water-based units.</td>
+      <td><code>en14825_part_load_factor()</code>, <code>HeatPumpSystemCalculator</code>, <code>CoolingGenerationSystemCalculator</code></td>
+    </tr>
+  </table>
+
+  <h2>Main Inputs</h2>
+  <table>
+    <tr><th>Input</th><th>Meaning</th><th>Required Columns / Keys</th></tr>
+    <tr>
+      <td>Heating rating points</td>
+      <td>Declared heating capacity and COP at EN 14511/EN 14825 source and sink temperatures.</td>
+      <td><code>source_temperature_C</code>, <code>sink_temperature_C</code>, <code>capacity_kW</code>, <code>cop</code> or <code>input_power_kW</code></td>
+    </tr>
+    <tr>
+      <td>Cooling rating points</td>
+      <td>Declared cooling capacity and EER at EN 14511/EN 14825 source and chilled-water temperatures.</td>
+      <td><code>source_temperature_C</code>, <code>sink_temperature_C</code>, <code>capacity_kW</code>, <code>eer</code> or <code>input_power_kW</code></td>
+    </tr>
+    <tr>
+      <td>Design loads</td>
+      <td>Reference design heating and cooling loads used to derive standard part-load capacity ratios.</td>
+      <td><code>heating_design_load_kW</code>, <code>cooling_design_load_kW</code></td>
+    </tr>
+    <tr>
+      <td>Degradation coefficients</td>
+      <td>EN 14825 cycling degradation coefficients. For air-to-water units the default is <code>0.9</code> when no measured value is supplied.</td>
+      <td><code>heating_degradation_coefficient</code>, <code>cooling_degradation_coefficient</code></td>
+    </tr>
+    <tr>
+      <td>CLI switch</td>
+      <td>Controls whether examples use standards-aware rating data and EN 14825 correction or the previous simple maps.</td>
+      <td><code>--performance-data-method en14511-14825</code> or <code>--performance-data-method simple</code></td>
+    </tr>
+  </table>
+
+  <h2>Main Formulas</h2>
+  <table>
+    <tr><th>Standard Location</th><th>Formula Implemented</th><th>Code</th></tr>
+    <tr>
+      <td>EN 14511-1:2022 definitions of COP and EER</td>
+      <td><code>COP = heating_capacity_kW / effective_power_input_kW</code><br><code>EER = cooling_capacity_kW / effective_power_input_kW</code></td>
+      <td><code>HeatPumpPerformanceDataCalculator._normalize_points()</code></td>
+    </tr>
+    <tr>
+      <td>EN 14825:2022, cooling part-load capacity ratio, Formula (8)</td>
+      <td><code>CR = Pdesignc * pl(Tj) / Pdc</code>, clipped to <code>CR &lt;= 1</code></td>
+      <td><code>_normalize_points()</code> and runtime load ratio in the generation calculators</td>
+    </tr>
+    <tr>
+      <td>EN 14825:2022, heating part-load capacity ratio, Formula (21)</td>
+      <td><code>CR = Pdesignh * pl(Tj) / Pdh</code>, clipped to <code>CR &lt;= 1</code></td>
+      <td><code>_normalize_points()</code> and runtime load ratio in the generation calculators</td>
+    </tr>
+    <tr>
+      <td>EN 14825:2022, air-to-water cooling, Formula (10)</td>
+      <td><code>EERbin = EERd * CR / (Cd * CR + (1 - Cd))</code></td>
+      <td><code>en14825_part_load_factor()</code> and <code>CoolingGenerationSystemCalculator._simulate()</code></td>
+    </tr>
+    <tr>
+      <td>EN 14825:2022, air-to-water heating, Formula (23)</td>
+      <td><code>COPbin = COPd * CR / (Cd * CR + (1 - Cd))</code></td>
+      <td><code>en14825_part_load_factor()</code> and <code>HeatPumpSystemCalculator._apply_part_load_performance()</code></td>
+    </tr>
+    <tr>
+      <td>EN 14825:2022, SEERon and SCOPon bin weighting, Formulas (6), (16), (17)</td>
+      <td>The same bin-specific performance concept is used for simulation electricity: <code>E = Q / COPbin</code> or <code>E = Q / EERbin</code>.</td>
+      <td><code>HeatPumpSystemCalculator</code>, <code>CoolingGenerationSystemCalculator</code></td>
+    </tr>
+  </table>
+
+  <h2>Calculation Flow</h2>
+  <ol>
+    <li>The example creates EN 14511/EN 14825-style heating and cooling rating rows for the selected scenario.</li>
+    <li><code>HeatPumpPerformanceDataCalculator</code> normalizes aliases, calculates missing COP/EER or input power and exports declared capacity/COP/EER maps.</li>
+    <li>The same rating rows are augmented with <code>capacity_ratio</code>, <code>part_load_factor</code> and <code>performance_at_part_load</code> for audit plots.</li>
+    <li>The heating/DHW heat-pump calculator interpolates declared COP and capacity from the map at each EN 15316-4-2 temperature bin.</li>
+    <li>If <code>part_load_performance_method="en14825"</code>, runtime capacity ratio is calculated from supplied heat divided by available capacity-hours, and COP is corrected to COPbin.</li>
+    <li>The EN 16798-13 cooling-generation calculator performs the analogous EER correction for mechanical cooling operation.</li>
+  </ol>
+
+  <h2>Main Outputs</h2>
+  <table>
+    <tr><th>Output File / Column</th><th>Description</th></tr>
+    <tr><td><code>performance_14511_14825_rating_points.csv</code></td><td>Normalized rating rows with declared COP/EER, capacity ratio and EN 14825 part-load performance.</td></tr>
+    <tr><td><code>performance_14511_14825_heating_map.csv</code></td><td>Declared heating capacity and COP map used by EN 15316-4-2.</td></tr>
+    <tr><td><code>performance_14511_14825_cooling_map.csv</code></td><td>Declared cooling capacity and EER map used by EN 16798-13 or the simplified reversible cooling branch.</td></tr>
+    <tr><td><code>performance_14511_14825_summary.csv</code></td><td>Rating-point counts, design loads, degradation coefficients and mean declared/part-load performance.</td></tr>
+    <tr><td><code>heat_pump_bin_results.csv</code></td><td>Now includes <code>H/W/C_performance_full_load</code>, <code>H/W/C_part_load_ratio</code> and <code>H/W/C_part_load_factor</code>.</td></tr>
+    <tr><td><code>cooling_generation_16798_13_hourly_results.csv</code></td><td>Now includes <code>EER_C_gen_full_load</code>, <code>f_C_PL</code> and <code>f_C_PLF</code>.</td></tr>
+    <tr><td><code>visuals/00_performance_14511_14825.html</code></td><td>Interactive inspection of rating COP/EER, COPbin/EERbin, capacity and EN 14825 factors.</td></tr>
+    <tr><td><code>visuals/05_bin_performance.html</code></td><td>Heat-pump bin plot now contrasts full-load and part-load-corrected COP/EER.</td></tr>
+  </table>
+
+  <h2>Run Commands</h2>
+  <pre><code>python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path full
+python examples/heat_pump_15316_4_2_example.py --scenario bolzano --calculation-path full
+
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path full --performance-data-method simple
+python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path simple --performance-data-method en14511-14825</code></pre>
+
+  <h2>Audit Checklist</h2>
+  <ul>
+    <li>Check EN 14511-2:2022 Tables 12 to 16 against the temperatures in <code>heat_pump_performance_data()</code>.</li>
+    <li>Check EN 14825:2022 Formula (10) and Formula (23) against <code>en14825_part_load_factor()</code>.</li>
+    <li>Check that the default air-to-water degradation coefficient is <code>0.9</code> unless overridden by measured data.</li>
+    <li>Check <code>performance_14511_14825_rating_points.csv</code> and <code>visuals/00_performance_14511_14825.html</code> before inspecting downstream generation results.</li>
+  </ul>
+</body>
+</html>

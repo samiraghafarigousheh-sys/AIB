@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>European EPB System Simulation Workflow Audit</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; color: #1f2933; line-height: 1.5; }
+    h1, h2, h3 { color: #102a43; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0 28px; }
+    th, td { border: 1px solid #d7dde5; padding: 8px 10px; vertical-align: top; }
+    th { background: #eef2f7; text-align: left; }
+    code { background: #eef2f7; padding: 1px 4px; border-radius: 4px; }
+    pre { background: #f8fafc; border: 1px solid #d7dde5; padding: 12px 14px; overflow-x: auto; }
+    .note { background: #fff8e5; border: 1px solid #f0d98c; border-radius: 6px; padding: 12px 14px; }
+    .ok { color: #1f7a4d; font-weight: 700; }
+    .partial { color: #956000; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>European EPB System Simulation Workflow Audit</h1>
+
+  <p>
+    This page is the parent audit trail for the Athens and Bolzano European
+    EPB examples. It shows how the implemented standards connect to one
+    another, which files carry data between modules, and where to continue the
+    detailed clause-by-clause review.
+  </p>
+
+  <h2>Default Full Workflow</h2>
+  <pre><code>Example building geometry and schedules
+  -> EN ISO 52016-1 sensible heating/cooling needs
+  -> EN 15316-2 room emission and control effects for heating/cooling
+  -> EN 12831-3 DHW energy-need profile and DHW design sizing
+  -> EN 16798-9 cooling operating conditions and chilled-water handoff
+  -> EN 15316-3 heating/cooling/DHW water distribution losses and pump auxiliaries
+  -> EN 15316-5 heating/DHW storage losses and storage auxiliaries
+  -> EN 16798-15 cooling storage heat gains and storage auxiliaries
+  -> EN 14511 / EN 14825 product capacity, COP/EER and part-load performance data
+  -> optional EN 15316-4-3 / EN 15316-4-6 solar thermal and PV
+  -> EN 15316-4-2 heating/DHW heat-pump generation
+     or EN 15316-4-1 boiler, EN 15316-4-4 CHP, EN 15316-4-5 district heat
+  -> EN 16798-13 cooling generation
+  -> combined generator summaries, CSV outputs and HTML inspection plots</code></pre>
+
+  <div class="note">
+    <strong>Default calculation path:</strong>
+    <code>python examples/heat_pump_15316_4_2_example.py --scenario athens --calculation-path full</code>.
+    Replace <code>athens</code> with <code>bolzano</code> for the Italian example.
+    Use <code>--calculation-path full-renewables</code>,
+    <code>--calculation-path boiler-full</code>, <code>--calculation-path chp-full</code>
+    or <code>--calculation-path district-full</code> to exercise the newly added
+    generation branches.
+  </div>
+
+  <h2>Module Handoffs</h2>
+  <table>
+    <tr>
+      <th>Step</th>
+      <th>Standard</th>
+      <th>Code Entry Point</th>
+      <th>Main Inputs</th>
+      <th>Main Outputs Passed Forward</th>
+      <th>Status</th>
+    </tr>
+    <tr>
+      <td>Building definition</td>
+      <td>Model input convention</td>
+      <td><code>example_building()</code>, <code>building_geometry_summary()</code></td>
+      <td>Useful floor area, footprint, surfaces, floors, schedules, setpoints, weather location.</td>
+      <td><code>building_geometry_summary.csv</code>; validated building object for ISO 52016.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Sensible space needs</td>
+      <td>EN ISO 52016-1</td>
+      <td><code>run_iso52016()</code>, <code>ISO52016.Temperature_and_Energy_needs_calculation()</code></td>
+      <td>Geometry, envelope, setpoints, profiles, weather.</td>
+      <td>Hourly outdoor temperature, operative temperature, heating need and cooling need.</td>
+      <td><span class="ok">Implemented in existing codebase</span></td>
+    </tr>
+    <tr>
+      <td>Space emission</td>
+      <td>EN 15316-2</td>
+      <td><code>EmissionSystemCalculator.run_timeseries()</code></td>
+      <td>ISO 52016 needs, recalculated equivalent-setpoint needs, emitter/control data.</td>
+      <td><code>Q_H_em_in_kWh</code>, <code>Q_C_em_in_kWh</code>, emission losses and auxiliaries.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>DHW needs and design sizing</td>
+      <td>EN 12831-3</td>
+      <td><code>Volume_and_energy_DHW_calculation()</code>, <code>make_dhw_profile()</code>, <code>DHWDesignLoadCalculator.run_timeseries()</code></td>
+      <td>Useful floor area, residential typology, water temperatures, calendar and hourly fractions; DHW storage, generator and distribution sizing data.</td>
+      <td>Hourly <code>Q_W_kWh</code> DHW energy need; one-minute design-day supply curve; selected DHW storage volume and design flow.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Cooling operating conditions</td>
+      <td>EN 16798-9</td>
+      <td><code>CoolingSystemCalculator.run_timeseries()</code></td>
+      <td>Cooling request, room-side conditions, chilled-water design data.</td>
+      <td>Cooling request, flow temperature, return temperature and volume flow for distribution/storage/generation.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Water distribution</td>
+      <td>EN 15316-3</td>
+      <td><code>DistributionSystemCalculator.run_timeseries()</code></td>
+      <td>Heating, cooling and DHW loads; water temperatures; pipe sections; pump data; EN 12831-3 DHW design flow.</td>
+      <td>Generator-side heating/cooling/DHW loads, pipe losses and pump auxiliary electricity.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Heating/DHW storage</td>
+      <td>EN 15316-5</td>
+      <td><code>StorageSystemCalculator.run_timeseries()</code></td>
+      <td>Heating and DHW loads after distribution, storage standby-loss data, EN 12831-3 selected DHW storage volume, storage temperatures and pump data.</td>
+      <td>Generator-side heating and DHW loads after storage losses and recovered pump heat.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Cooling storage</td>
+      <td>EN 16798-15</td>
+      <td><code>CoolingStorageSystemCalculator.run_timeseries()</code></td>
+      <td>Cooling request after distribution, chilled storage temperatures, heat-gain and pump data.</td>
+      <td>Cooling generator-side load, cooling storage heat gains and auxiliary electricity.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Product performance data</td>
+      <td>EN 14511-1, EN 14511-2, EN 14825</td>
+      <td><code>HeatPumpPerformanceDataCalculator.run()</code></td>
+      <td>Declared capacity/COP/EER points, design loads and degradation coefficients.</td>
+      <td>Heating/DHW COP/capacity maps, cooling EER/capacity maps and EN 14825 part-load factors.</td>
+      <td><span class="partial">Rating-data and part-load layer implemented</span></td>
+    </tr>
+    <tr>
+      <td>Heating/DHW generation</td>
+      <td>EN 15316-4-2</td>
+      <td><code>HeatPumpSystemCalculator.run_timeseries()</code></td>
+      <td>Heating and DHW generator-side loads, source/sink temperatures, capacity/COP maps, backup and auxiliary data.</td>
+      <td>Heat-pump input electricity, backup electricity, auxiliaries, generation losses, SPF and bin tables.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Combustion generation</td>
+      <td>EN 15316-4-1</td>
+      <td><code>CombustionBoilerSystemCalculator.run_timeseries()</code></td>
+      <td>Heating/DHW generator-side loads, boiler efficiency data, return-temperature correction, standby losses, modulation and auxiliaries.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Cogeneration</td>
+      <td>EN 15316-4-4</td>
+      <td><code>CogenerationSystemCalculator.run_timeseries()</code></td>
+      <td>Thermal-led CHP output, fuel input, useful electricity generation, self-consumption/export, backup heat and auxiliaries.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>District energy</td>
+      <td>EN 15316-4-5</td>
+      <td><code>DistrictEnergySystemCalculator.run_timeseries()</code></td>
+      <td>District heating/DHW and optional district-cooling substation losses, delivered energy and auxiliaries.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Solar/PV renewables</td>
+      <td>EN 15316-4-3 / EN 15316-4-6</td>
+      <td><code>RenewableEnergySystemCalculator.run_timeseries()</code></td>
+      <td>Solar thermal useful heat allocated to DHW/heating and PV generation/self-consumption/export on the simulation time axis, with optional shading/loss and battery dispatch parameters.</td>
+      <td><span class="ok">Implemented</span></td>
+    </tr>
+    <tr>
+      <td>Lighting</td>
+      <td>EN 15193-1</td>
+      <td><code>LightingSystemCalculator.run_timeseries()</code></td>
+      <td>Installed lighting power, schedules, daylight/occupancy controls, LENI-style indicator and internal heat gains.</td>
+      <td><span class="ok">Implemented for STREPIN overlays</span></td>
+    </tr>
+    <tr>
+      <td>Ventilation and heat recovery</td>
+      <td>EN 16798-5 / EN 16798-7</td>
+      <td><code>VentilationSystemCalculator.run_timeseries()</code></td>
+      <td>Mechanical/natural flow, heat recovery, effective ventilation heat-transfer coefficient and fan electricity.</td>
+      <td><span class="ok">Implemented for STREPIN overlays</span></td>
+    </tr>
+    <tr>
+      <td>BACS</td>
+      <td>EN 15232-1 / EN ISO 52120-1</td>
+      <td><code>BACSControlFactorCalculator.run_timeseries()</code></td>
+      <td>Service-specific automation/control factors for heating, cooling, DHW, lighting, ventilation and auxiliaries.</td>
+      <td><span class="ok">Implemented for STREPIN overlays</span></td>
+    </tr>
+    <tr>
+      <td>Primary energy and economics</td>
+      <td>EN ISO 52000-1 / EN 15459-1</td>
+      <td><code>PrimaryEnergyAccountingCalculator</code>, <code>CostOptimalityCalculator</code></td>
+      <td>Delivered/exported primary-energy accounting plus global cost, annual running cost and annualized cost.</td>
+      <td><span class="ok">Implemented for STREPIN outputs</span></td>
+    </tr>
+    <tr>
+      <td>Cooling generation</td>
+      <td>EN 16798-13</td>
+      <td><code>CoolingGenerationSystemCalculator.run_timeseries()</code></td>
+      <td>Cooling generator-side load, source/sink temperatures, EER/capacity map, auxiliary data and EN 14825 correction.</td>
+      <td>Cooling electricity, rejected heat, auxiliary electricity and SEER.</td>
+      <td><span class="ok">Compression cooling implemented</span></td>
+    </tr>
+  </table>
+
+  <h2>Detailed Audit Pages</h2>
+  <table>
+    <tr><th>Audit Page</th><th>What It Explains</th></tr>
+    <tr><td><a href="dhw_12831_3_audit.html">DHW EN 12831-3 audit</a></td><td>DHW energy-need inputs, Annex B residential formulas, hourly allocation, storage switch points, time lag, effective reheating power and supply-curve sizing.</td></tr>
+    <tr><td><a href="emission_15316_2_audit.html">Emission EN 15316-2 audit</a></td><td>Emitter/control effects, emission losses, equivalent setpoints and auxiliary electricity.</td></tr>
+    <tr><td><a href="distribution_15316_3_audit.html">Distribution EN 15316-3 audit</a></td><td>Heating, cooling and DHW pipe losses and pump auxiliary calculations.</td></tr>
+    <tr><td><a href="storage_15316_5_audit.html">Storage EN 15316-5 audit</a></td><td>Heating and DHW single-volume storage losses, recoverability and pump auxiliaries.</td></tr>
+    <tr><td><a href="performance_14511_14825_audit.html">EN 14511 / EN 14825 product performance audit</a></td><td>Rating-point normalization, COP/EER maps and part-load correction.</td></tr>
+    <tr><td><a href="heat_pump_15316_4_2_audit.html">Heat pump EN 15316-4-2 audit</a></td><td>Heating/DHW temperature-bin generation, capacity checks, backup, auxiliaries and SPF.</td></tr>
+    <tr><td><a href="generation_15316_4_1_4_4_4_5_audit.html">Generation EN 15316-4-1/4-4/4-5 audit</a></td><td>Boiler, CHP and district heating/cooling generator boundaries and result files.</td></tr>
+    <tr><td><a href="renewables_15316_4_3_4_6_audit.html">Renewables EN 15316-4-3/4-6 audit</a></td><td>Solar thermal load reduction, PV production, self-consumption and export accounting.</td></tr>
+    <tr><td><a href="cooling_16798_audit.html">Cooling EN 16798 audit</a></td><td>Cooling operating conditions, chilled storage and compression cooling generation.</td></tr>
+    <tr><td><a href="ventilation_ahu_audit.html">Ventilation AHU EN 16798-5-1 audit</a></td><td>Sensible AHU model behind the ISO 52016-1 ventilation boundary: heat recovery, frost/bypass behaviour, coils, fans, lagged extract-air coupling, and the implemented/simplified/not-included scope.</td></tr>
+    <tr><td><a href="strepin_archetype_engine_audit.html">Italian STREPIN archetype engine audit</a></td><td>How the STREPIN workbook archetypes and packages are converted into pyBuildingEnergy cases and EN-standard system summaries.</td></tr>
+  </table>
+
+  <h2>Primary Output Files</h2>
+  <table>
+    <tr><th>Output File</th><th>Workflow Role</th></tr>
+    <tr><td><code>building_geometry_summary.csv</code></td><td>Area and geometry sanity check before reviewing loads.</td></tr>
+    <tr><td><code>iso52016_loads_with_dhw.csv</code></td><td>Common hourly input table: ISO 52016 space loads plus EN 12831-3 DHW demand.</td></tr>
+    <tr><td><code>dhw_12831_3_design_timeseries.csv</code></td><td>Representative one-minute EN 12831-3 design-day supply-curve table.</td></tr>
+    <tr><td><code>dhw_12831_3_design_summary.csv</code></td><td>DHW design-day need, selected storage volume, design flow and supply-curve pass/fail summary.</td></tr>
+    <tr><td><code>emission_15316_2_hourly_results.csv</code></td><td>Emission-adjusted heating and cooling loads.</td></tr>
+    <tr><td><code>distribution_15316_3_hourly_results.csv</code></td><td>Distribution-adjusted heating, cooling and DHW loads plus pump energy.</td></tr>
+    <tr><td><code>storage_15316_5_hourly_results.csv</code></td><td>Heating and DHW storage-adjusted generator input loads.</td></tr>
+    <tr><td><code>cooling_16798_9_hourly_results.csv</code></td><td>Cooling system operating conditions and flow handoff.</td></tr>
+    <tr><td><code>cooling_storage_16798_15_hourly_results.csv</code></td><td>Cooling storage-adjusted generator input loads.</td></tr>
+    <tr><td><code>performance_14511_14825_*.csv</code></td><td>Product rating points and generated heating/cooling maps.</td></tr>
+    <tr><td><code>heat_pump_bin_results.csv</code></td><td>Main EN 15316-4-2 heating/DHW bin-method audit table.</td></tr>
+    <tr><td><code>heating_generation_en15316_4_1_hourly_results.csv</code></td><td>Boiler generation table when <code>--calculation-path boiler-full</code> or <code>--heating-generation-method en15316-4-1</code> is used.</td></tr>
+    <tr><td><code>heating_generation_en15316_4_4_hourly_results.csv</code></td><td>Thermal-led CHP table when <code>--calculation-path chp-full</code> or <code>--heating-generation-method en15316-4-4</code> is used.</td></tr>
+    <tr><td><code>heating_generation_en15316_4_5_hourly_results.csv</code></td><td>District heat table when <code>--calculation-path district-full</code> or <code>--heating-generation-method en15316-4-5</code> is used.</td></tr>
+    <tr><td><code>renewables_15316_4_3_4_6_hourly_results.csv</code></td><td>Solar thermal and PV hourly balance when renewables are enabled.</td></tr>
+    <tr><td><code>cooling_generation_16798_13_hourly_results.csv</code></td><td>EN 16798-13 cooling generation electricity and performance table.</td></tr>
+    <tr><td><code>combined_generation_summary.csv</code></td><td>Annual heating/DHW and cooling generator boundary summary used by the inspection index.</td></tr>
+    <tr><td><code>visuals/00_user_overview.html</code></td><td>First-read end-user overview: annual demand served, final electricity split, monthly trends, SPF/SEER and useful-area intensities.</td></tr>
+    <tr><td><code>visuals/00_workflow_handoff.html</code></td><td>Reviewer handoff plot showing how heating, cooling and DHW loads pass through the implemented standards before generation.</td></tr>
+    <tr><td><code>visuals/00_sanity_checks.html</code></td><td>Geometry, peak-load/capacity and exceptional-output checks for fast plausibility review.</td></tr>
+    <tr><td><code>visuals/00_dhw_design_12831_3.html</code></td><td>EN 12831-3 DHW design-day needs, storage switch curves, residual storage, effective reheating power and losses.</td></tr>
+    <tr><td><code>inspection_index.html</code></td><td>Visual entry point for the generated result folder.</td></tr>
+  </table>
+
+  <h2>Calculation Path Switches</h2>
+  <table>
+    <tr><th>CLI Option</th><th>Workflow Effect</th></tr>
+    <tr><td><code>--calculation-path full</code></td><td>Runs the full default chain shown above.</td></tr>
+    <tr><td><code>--calculation-path full-renewables</code></td><td>Runs the full default chain and applies EN 15316-4-3/4-6 solar thermal/PV before generation.</td></tr>
+    <tr><td><code>--calculation-path boiler-full</code></td><td>Runs the full upstream/cooling chain and switches heating/DHW generation to EN 15316-4-1.</td></tr>
+    <tr><td><code>--calculation-path chp-full</code></td><td>Runs the full upstream/cooling chain and switches heating/DHW generation to EN 15316-4-4.</td></tr>
+    <tr><td><code>--calculation-path district-full</code></td><td>Runs the full upstream/cooling chain and switches heating/DHW generation to EN 15316-4-5.</td></tr>
+    <tr><td><code>--calculation-path simple</code></td><td>Bypasses EN 15316-2, EN 15316-3, EN 15316-5 and EN 16798 modules; sends direct ISO 52016/DHW loads to the heat-pump calculator.</td></tr>
+    <tr><td><code>--calculation-path emission-distribution</code></td><td>Runs EN 15316-2 and EN 15316-3, but bypasses heating/DHW storage and cooling storage.</td></tr>
+    <tr><td><code>--calculation-path storage-only</code></td><td>Runs EN 15316-5 between direct ISO 52016/DHW loads and generation.</td></tr>
+    <tr><td><code>--calculation-path no-cooling-storage</code></td><td>Bypasses EN 16798-15 while retaining EN 16798-13 cooling generation.</td></tr>
+    <tr><td><code>--calculation-path heat-pump-cooling</code></td><td>Uses the older reversible heat-pump cooling branch instead of EN 16798-13.</td></tr>
+    <tr><td><code>--performance-data-method en14511-14825</code></td><td>Builds product maps from rating points and applies EN 14825 part-load correction.</td></tr>
+    <tr><td><code>--performance-data-method simple</code></td><td>Uses the earlier synthetic performance maps without EN 14825 correction.</td></tr>
+    <tr><td><code>--dhw-design-method en12831-3</code></td><td>Runs the EN 12831-3 DHW design-heat-load/supply-curve sizing layer; this is the default except in the simple calculation path.</td></tr>
+    <tr><td><code>--dhw-design-method simple</code></td><td>Keeps the previous fixed DHW distribution and storage assumptions.</td></tr>
+    <tr><td><code>--dhw-sizing-mode check | size_storage | size_power | auto</code></td><td>Selects whether EN 12831-3 only checks the supplied system or sizes storage volume and/or reheating power.</td></tr>
+    <tr><td><code>--heating-generation-method en15316-4-2 | en15316-4-1 | en15316-4-4 | en15316-4-5</code></td><td>Explicitly chooses heat-pump, boiler, CHP or district heating/DHW generation.</td></tr>
+    <tr><td><code>--renewable-method en15316-4-3-4-6</code></td><td>Enables the solar thermal/PV branch independently of the calculation-path shortcut.</td></tr>
+  </table>
+
+  <h2>Known Workflow Boundaries</h2>
+  <ul>
+    <li>EN 12831-3 is implemented for DHW energy needs and DHW system design sizing with storage switch points, time lag, effective reheating power and supply curves.</li>
+    <li>Project-specific direct-flow fixture sizing, declared storage standby losses and special tapping programs can be supplied from external references such as EN 806-3, EN 12897/product data or EN 13203-2 when those inputs are required.</li>
+    <li>EN 14511 / EN 14825 support product rating maps and part-load correction; the complete regulatory SCOP/SEER labelling procedure is not implemented.</li>
+    <li>EN 16798-13 is implemented for compression cooling generation in the examples; non-compression generators are not implemented.</li>
+    <li>The default cooling generation is EN 16798-13. Heating and DHW generation default to EN 15316-4-2 heat pumps, with EN 15316-4-1, EN 15316-4-4 and EN 15316-4-5 alternatives available by CLI switch.</li>
+    <li>Solar thermal and PV are implemented as a deterministic time-series branch. Formal compliance studies should replace example yields with project, product or national-annex data.</li>
+  </ul>
+</body>
+</html>
