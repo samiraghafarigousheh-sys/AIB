@@ -45,18 +45,54 @@ MELBOURNE_LON = 144.968
 # ~1.5 deg is roughly greater-Melbourne; beyond that the site is different.
 MAX_SITE_OFFSET_DEG = 1.5
 
-# Public Melbourne TMY mirrors, tried in order. Both zip and bare .epw are
-# handled. These hosts are reachable from Colab; some sandboxes block them.
+# climate.onebuilding.org directory holding every Victorian TMY. Scraping the
+# index is deliberate: TMYx filenames carry a year range that changes with each
+# release (…_TMYx.2009-2023.zip today), so a hardcoded URL rots. Listing the
+# directory and matching AUS_VIC_Melbourne*.zip survives that.
+ONEBUILDING_VIC_INDEX = (
+    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/"
+    "AUS_Australia/VIC_Victoria/"
+)
+
+# Tried before scraping, in order. Both .zip and bare .epw are handled.
 MELBOURNE_EPW_MIRRORS = [
-    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/AUS_Australia/VIC_Victoria/"
-    "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.2009-2023.zip",
-    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/AUS_Australia/VIC_Victoria/"
-    "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.zip",
-    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/AUS_Australia/VIC_Victoria/"
-    "AUS_VIC_Melbourne.Airport.948660_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Olympic.Park.948656_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Airport.948660_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.2007-2021.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.zip",
     "https://energyplus-weather.s3.amazonaws.com/southwest_pacific_wmo_region_5/AUS/"
     "AUS_Melbourne.948660_IWEC/AUS_Melbourne.948660_IWEC.epw",
 ]
+
+
+def discover_melbourne_urls(timeout: int = 60) -> list[str]:
+    """
+    Scrape the Victoria directory index for Melbourne TMY archives.
+
+    Returns candidate URLs newest-looking first. Any failure returns [] so the
+    caller just falls through to the hardcoded list.
+    """
+    import re
+    import requests
+
+    try:
+        resp = requests.get(ONEBUILDING_VIC_INDEX, timeout=timeout)
+        if resp.status_code != 200:
+            return []
+        hrefs = re.findall(r'href=["\']([^"\']+\.zip)["\']', resp.text, flags=re.I)
+    except Exception:
+        return []
+
+    names = []
+    for h in hrefs:
+        base = h.split("/")[-1]
+        if re.match(r"AUS_VIC_Melbourne", base, flags=re.I):
+            names.append(base)
+    # Prefer TMYx over older TMY/IWEC, and later year ranges first.
+    names.sort(key=lambda n: ("TMYx" not in n, n), reverse=False)
+    names.sort(key=lambda n: re.findall(r"(\d{4})-(\d{4})", n) or [("0", "0")], reverse=True)
+    return [ONEBUILDING_VIC_INDEX + n for n in dict.fromkeys(names)]
 
 
 class WeatherUnavailable(RuntimeError):
@@ -135,7 +171,15 @@ def download_melbourne_epw(dest_dir: Path = CACHE_DIR, timeout: int = 90) -> Pat
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     failures = []
-    for url in MELBOURNE_EPW_MIRRORS:
+
+    # Known URLs first (cheap), then whatever the directory index actually holds.
+    candidates = list(MELBOURNE_EPW_MIRRORS)
+    discovered = discover_melbourne_urls()
+    if discovered:
+        print(f"  found {len(discovered)} Melbourne archive(s) in the onebuilding index")
+        candidates = discovered + [u for u in candidates if u not in discovered]
+
+    for url in candidates:
         try:
             resp = requests.get(url, timeout=timeout, allow_redirects=True)
             if resp.status_code != 200 or not resp.content:
