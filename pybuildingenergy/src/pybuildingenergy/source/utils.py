@@ -1893,6 +1893,295 @@ def _internal_h_ci_value(
     except Exception:
         return h_table
 
+
+# ===============================================================================================
+#                             DYNAMIC WINDOW PROPERTIES  (AIB change 1)
+# ===============================================================================================
+#
+# EN ISO 52016-1 treats both window properties as constants:
+#
+#   * the thermal transmittance U_win, which fixes the window's share of the
+#     transmission loss for the whole year, and
+#   * the total solar energy transmittance g_win, which is applied to the
+#     incident irradiance regardless of where the sun actually is.
+#
+# Neither is constant in reality. U_win moves with the external surface film,
+# which is wind driven; g_win falls away steeply once the beam is far off the
+# glazing normal, because reflectance at the air-glass interfaces rises towards
+# unity at grazing incidence.
+#
+# This module adds the two corresponding time-step formulations:
+#
+#   1. R_win(t) = 1/U_win(t) - R_si - R_se(t)
+#
+#      Implemented by holding the *construction* resistance R_c fixed at the
+#      value implied by the rated U-value under standard film resistances, and
+#      letting only the external film float with wind speed. See the note in
+#      ``_compute_h_ce_window_t`` for why the split matters.
+#
+#   2. F_W, a solar-angle dependent correction on g_win, combined over the
+#      diffuse and direct streams as
+#
+#          F_W = (F_W,diff * I_dif + F_W,dir * I_dir * F_sh,obst)
+#                / (I_dif + I_dir * F_sh,obst)
+#
+#      with F_W,dir from the Karlsson & Roos angular model.
+#
+# ---------------------------------------------------------------------------
+
+# Karlsson & Roos angular model for the total solar energy transmittance:
+#
+#     g(theta) / g(0) = 1 - a*z**alpha - b*z**beta - c*z**gamma,   z = theta/90
+#
+# with the constraint a + b + c = 1, which forces g(90 deg) = 0.
+#
+# PROVENANCE OF THESE NUMBERS: the functional form is Karlsson & Roos (2000).
+# The coefficients below are NOT their published table (which is paywalled and
+# was not consulted). They were fitted to a Fresnel + Beer-Lambert reference
+# curve for uncoated clear float glass (n = 1.52, 4 mm, K = 26 1/m) by
+# ``tools/derive_karlsson_roos_coefficients.py`` in this repository, and
+# reproduce that curve to within 0.5 % over 0-90 deg. For coated or
+# solar-control glazing, supply the manufacturer's or the published
+# coefficients explicitly via ``window_angular_coefficients``.
+#
+# Keyed by number of panes: (a, b, c, alpha, beta, gamma)
+_WINDOW_ANGULAR_COEFFS_DEFAULT = {
+    1: (-0.15316, 1.02367, 0.12949, 35.7829, 7.1299, 2.4670),
+    2: (-0.58903, 1.38944, 0.19959, 15.1131, 6.2706, 2.3007),
+    3: (-2.27406, 3.00000, 0.27406, 9.3774, 6.7440, 2.2132),
+}
+
+# Isotropic-hemispherical average of the same curve,
+#     F_diff = 2 * integral_0^{pi/2} F(theta) cos(theta) sin(theta) dtheta,
+# i.e. derived from the direct curve rather than assumed. Note the single-pane
+# value lands on 0.907, essentially the constant 0.9 that ISO 13790 / ISO 52016
+# use as the non-scattered-radiation correction factor.
+_WINDOW_ANGULAR_DIFFUSE_DEFAULT = {
+    1: 0.90671,
+    2: 0.85534,
+    3: 0.81627,
+}
+
+# The constant used by the standard when the angular model is disabled but a
+# non-scattering correction is still wanted.
+_WINDOW_F_W_CONSTANT = 0.9
+
+
+def _normalize_window_angular_model(model_raw) -> str:
+    """Normalise the solar-angle correction selector for windows."""
+    if model_raw is None:
+        return "karlsson_roos"
+    model = str(model_raw).strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "default": "karlsson_roos",
+        "karlssonroos": "karlsson_roos",
+        "roos": "karlsson_roos",
+        "karlsson": "karlsson_roos",
+        "angular": "karlsson_roos",
+        "dynamic": "karlsson_roos",
+        "iso": "constant",
+        "fixed": "constant",
+        "constant_0.9": "constant",
+        "off": "none",
+        "disabled": "none",
+        "baseline": "none",
+    }
+    model = aliases.get(model, model)
+    if model not in {"karlsson_roos", "constant", "none"}:
+        raise ValueError(
+            "window_angular_solar_model must be one of: "
+            "'karlsson_roos', 'constant', 'none'."
+        )
+    return model
+
+
+def _lookup_simulation_option(building_object, keys, default=None):
+    """
+    Read the first present key from simulation options, then building
+    parameters. Mirrors the lookup order already used by the external
+    convection / radiation model resolvers.
+    """
+    if not isinstance(building_object, dict):
+        return default
+    sim_opt = _get_simulation_options(building_object)
+    for key in keys:
+        if sim_opt.get(key) is not None:
+            return sim_opt.get(key)
+    bp = building_object.get("building_parameters", {}) or {}
+    for key in keys:
+        if bp.get(key) is not None:
+            return bp.get(key)
+    return default
+
+
+def _resolve_dynamic_window_properties(building_object, override=None) -> bool:
+    """
+    Master switch for this change. Defaults to True on this branch so that
+    running an unmodified example script exercises the new physics; set
+    ``dynamic_window_properties = False`` to recover exact baseline behaviour
+    without switching branches.
+    """
+    if override is not None:
+        return bool(override)
+    raw = _lookup_simulation_option(
+        building_object,
+        ("dynamic_window_properties", "dynamic_window_props", "window_dynamic_properties"),
+        default=True,
+    )
+    if isinstance(raw, str):
+        return raw.strip().lower() not in {"false", "0", "no", "off", "none"}
+    return bool(raw)
+
+
+def _resolve_window_angular_model(building_object, override=None) -> str:
+    if override is not None:
+        return _normalize_window_angular_model(override)
+    return _normalize_window_angular_model(
+        _lookup_simulation_option(
+            building_object,
+            ("window_angular_solar_model", "window_solar_angular_model", "F_w_model"),
+        )
+    )
+
+
+def _resolve_window_convection_model(building_object, override=None) -> str:
+    """
+    External convection model used for the *window* external film only.
+
+    Defaults to 'simplecombined' (h_ce = 4 + 4*v), which returns exactly the
+    ISO 13789 constant 20 W/(m2 K) at the standard 4 m/s, so a run forced with
+    a constant 4 m/s wind reproduces baseline results.
+    """
+    if override is not None:
+        return _normalize_external_convection_model(override)
+    return _normalize_external_convection_model(
+        _lookup_simulation_option(
+            building_object,
+            ("window_convection_model", "window_h_ce_model"),
+            default="simplecombined",
+        )
+    )
+
+
+def _window_glazing_panes(surface: dict) -> int:
+    """Number of glazing panes, used to pick a default coefficient set."""
+    if not isinstance(surface, dict):
+        return 2
+    for key in ("glazing_panes", "n_panes", "number_of_panes", "panes"):
+        if surface.get(key) is not None:
+            try:
+                return int(np.clip(int(surface.get(key)), 1, 3))
+            except Exception:
+                pass
+    return 2
+
+
+def _window_angular_coefficients(surface: dict) -> tuple:
+    """
+    Return (a, b, c, alpha, beta, gamma) for a window surface.
+
+    A per-surface ``window_angular_coefficients`` entry wins over the fitted
+    defaults, so published Karlsson-Roos coefficients for a specific coated
+    product can be dropped in without touching this module.
+    """
+    if isinstance(surface, dict):
+        raw = surface.get("window_angular_coefficients")
+        if raw is not None:
+            try:
+                vals = tuple(float(v) for v in raw)
+                if len(vals) == 6:
+                    return vals
+            except Exception:
+                pass
+    return _WINDOW_ANGULAR_COEFFS_DEFAULT[_window_glazing_panes(surface)]
+
+
+def _window_angular_diffuse_factor(surface: dict) -> float:
+    """Diffuse-stream correction factor F_W,diff for a window surface."""
+    if isinstance(surface, dict):
+        raw = surface.get("window_angular_diffuse_factor")
+        if raw is not None:
+            try:
+                return float(np.clip(float(raw), 0.0, 1.0))
+            except Exception:
+                pass
+        if surface.get("window_angular_coefficients") is not None:
+            # Coefficients were overridden, so the tabulated diffuse average no
+            # longer matches them; integrate the supplied curve instead.
+            a, b, c, alpha, beta, gamma = _window_angular_coefficients(surface)
+            th = np.linspace(0.0, 90.0, 901)
+            rad = np.radians(th)
+            f = karlsson_roos_direct_factor(th, (a, b, c, alpha, beta, gamma))
+            return float(np.clip(2.0 * np.trapezoid(f * np.cos(rad) * np.sin(rad), rad), 0.0, 1.0))
+    return _WINDOW_ANGULAR_DIFFUSE_DEFAULT[_window_glazing_panes(surface)]
+
+
+def karlsson_roos_direct_factor(theta_deg, coeffs) -> float | np.ndarray:
+    """
+    Karlsson & Roos angular factor F_W,dir(theta) = g(theta)/g(0).
+
+    :param theta_deg: solar incidence angle from the surface normal [deg]
+    :param coeffs: (a, b, c, alpha, beta, gamma)
+    :return: factor clipped to [0, 1]; 0 for beams at or behind grazing incidence
+    """
+    a, b, c, alpha, beta, gamma = coeffs
+    z = np.clip(np.asarray(theta_deg, dtype=float) / 90.0, 0.0, 1.0)
+    f = 1.0 - a * z ** alpha - b * z ** beta - c * z ** gamma
+    f = np.clip(f, 0.0, 1.0)
+    return float(f) if np.ndim(f) == 0 else f
+
+
+def window_solar_correction_factor(
+    surface: dict,
+    theta_deg: float,
+    i_sol_dif: float,
+    i_sol_dir: float,
+    f_sh_obst: float,
+    model: str = "karlsson_roos",
+) -> float:
+    """
+    Overall solar transmittance correction factor F_W for one window at one
+    time step, weighting the diffuse and direct streams by their irradiance:
+
+        F_W = (F_W,diff * I_dif + F_W,dir * I_dir * F_sh,obst)
+              / (I_dif + I_dir * F_sh,obst)
+
+    The direct term carries the obstacle shading factor because the shaded
+    fraction of the beam never reaches the glazing and so must not be given
+    weight in the average.
+
+    :param surface: window surface dict
+    :param theta_deg: solar incidence angle on this surface [deg]
+    :param i_sol_dif: diffuse irradiance on the surface [W/m2]
+    :param i_sol_dir: direct irradiance on the surface [W/m2]
+    :param f_sh_obst: ISO 52016-1 Annex F Method 1 obstacle shading factor [-]
+    :param model: 'karlsson_roos', 'constant' or 'none'
+    :return: F_W in [0, 1]
+    """
+    model_n = _normalize_window_angular_model(model)
+    if model_n == "none":
+        return 1.0
+    if model_n == "constant":
+        return _WINDOW_F_W_CONSTANT
+
+    i_dif = max(0.0, float(i_sol_dif))
+    f_sh = float(f_sh_obst)
+    f_sh = float(np.clip(f_sh, 0.0, 1.0)) if np.isfinite(f_sh) else 1.0
+    i_dir = max(0.0, float(i_sol_dir)) * f_sh
+
+    denom = i_dif + i_dir
+    if denom <= 1.0e-9:
+        # No irradiance on the surface this hour; the factor is unused, but
+        # return the diffuse value rather than 0 so the result stays bounded.
+        return _window_angular_diffuse_factor(surface)
+
+    f_diff = _window_angular_diffuse_factor(surface)
+    theta = float(theta_deg) if np.isfinite(theta_deg) else 90.0
+    f_dir = float(karlsson_roos_direct_factor(theta, _window_angular_coefficients(surface)))
+
+    return float(np.clip((f_diff * i_dif + f_dir * i_dir) / denom, 0.0, 1.0))
+
+
 # ===============================================================================================
 #                                       MODULES SIMULATIONS
 # ===============================================================================================
@@ -2631,7 +2920,20 @@ class ISO52010:
         I_tot['I_sol_dif'] = I_dif_tot
         I_tot['I_sol_dir'] = I_dir_tot
         
-        return Solar_irradiance(solar_irradiance=I_tot), solar_altitude_angle, solar_azimuth_angle, I_dir_tot, I_dif_tot
+        # AIB change 1: the incidence angle on the inclined surface is already
+        # computed above for the irradiance decomposition but was discarded.
+        # It is returned as well so the window angular correction F_W,dir can be
+        # evaluated per orientation and per time step.
+        solar_incidence_angle_ic_deg = np.degrees(solar_incidence_angle_ic)
+
+        return (
+            Solar_irradiance(solar_irradiance=I_tot),
+            solar_altitude_angle,
+            solar_azimuth_angle,
+            I_dir_tot,
+            I_dif_tot,
+            solar_incidence_angle_ic_deg,
+        )
 
 
 def Calculation_ISO_52010(building_object, path_weather_file, weather_source="pvgis") -> simdf_52010:
@@ -2718,7 +3020,7 @@ def Calculation_ISO_52010(building_object, path_weather_file, weather_source="pv
 
     for orientation in set(orientation_elements):
 
-        Solar_irradiance, alt, az, I_dir_tot, I_dif_tot = ISO52010.Solar_irradiance_calculation(
+        Solar_irradiance, alt, az, I_dir_tot, I_dif_tot, theta_inc = ISO52010.Solar_irradiance_calculation(
             n_timesteps=n_tsteps,
             n_days=n_days_year,
             latitude_deg=weatherData.latitude,
@@ -2734,6 +3036,10 @@ def Calculation_ISO_52010(building_object, path_weather_file, weather_source="pv
         )
         Solar_irradiance.solar_irradiance.columns = [f'I_sol_tot_{orientation}',f'I_sol_dif_{orientation}',f'I_sol_dir_w_{orientation}']
         sim_df = pd.concat([sim_df, Solar_irradiance.solar_irradiance], axis=1)
+
+        # AIB change 1: store the per-orientation solar incidence angle so the
+        # window angular correction can be evaluated in the hourly loop.
+        sim_df[f"theta_inc_{orientation}"] = np.asarray(theta_inc, dtype=float)
 
         Shading_factor = ISO52010.Shading_reduction_factor_window(
             solar_altitude_angle=alt,
@@ -6930,6 +7236,28 @@ class ISO52016:
             building_object,
             kwargs.get("external_emissivity_default", None),
         )
+        # --- AIB change 1: dynamic window properties ------------------------
+        dyn_win = _resolve_dynamic_window_properties(
+            building_object, kwargs.get("dynamic_window_properties", None)
+        )
+        win_angular_model = (
+            _resolve_window_angular_model(
+                building_object, kwargs.get("window_angular_solar_model", None)
+            )
+            if dyn_win
+            else "none"
+        )
+        win_h_ce_model = (
+            _resolve_window_convection_model(
+                building_object, kwargs.get("window_convection_model", None)
+            )
+            if dyn_win
+            else "table"
+        )
+        win_h_ce_min = _resolve_external_convection_h_min(
+            building_object, kwargs.get("external_convection_h_min", None)
+        )
+        # --------------------------------------------------------------------
         i = 1
         with tqdm(total=12) as pbar:
 
@@ -7152,6 +7480,73 @@ class ISO52016:
                 heat_radiative_elements_external,
                 dtype=float,
             )
+            # AIB change 1: baseline (constant) external convective coefficients,
+            # kept as the fallback for every surface the window model does not
+            # touch.
+            heat_convective_elements_external_tab = np.asarray(
+                heat_convective_elements_external,
+                dtype=float,
+            )
+            # Index of the transparent elements, i.e. the only ones whose
+            # external film is made wind dependent by this change.
+            surf_is_window = np.array(
+                [
+                    bool(
+                        isinstance(building_object, dict)
+                        and building_object["building_surface"][_i].get("type") == "transparent"
+                    )
+                    for _i in range(bui_eln)
+                ],
+                dtype=bool,
+            )
+
+            def _compute_h_ce_window_t(theta_state_prev: np.ndarray, tstep: int) -> np.ndarray:
+                """
+                External convective coefficient per element for one time step.
+
+                Only transparent elements are made dynamic here; every other
+                surface keeps the constant ISO 13789 value. That restriction is
+                what makes this branch isolate the *window* effect: extending
+                the same treatment to opaque surfaces is change 2.
+
+                Note on why R_c is left alone: the rated U_win was measured
+                against standard film resistances, so the subtraction that
+                recovers the construction-only resistance in
+                ``Conductance_node_of_element`` must keep using the standard
+                value. Holding R_c fixed while letting the external film float
+                is exactly R_win(t) = 1/U_win(t) - R_si - R_se(t): the effective
+                window U rises in wind, falls in calm air, and returns to the
+                rated value at 4 m/s.
+                """
+                h_ce_t = heat_convective_elements_external_tab.copy()
+                if win_h_ce_model == "table" or not isinstance(building_object, dict):
+                    return h_ce_t
+
+                u_wind = float(WS10m_arr[tstep])
+                T_out_t = float(T2m_arr[tstep])
+                for Eli in range(bui_eln):
+                    if not surf_is_window[Eli]:
+                        continue
+                    # Ground-contact and adiabatic elements are never wind
+                    # exposed; an external convective coefficient on them is
+                    # meaningless.
+                    if Type_eli[Eli] != "EXT":
+                        continue
+                    r_ext = surf_ext_row[Eli] if surf_has_node[Eli] else -1
+                    if 0 <= r_ext < len(theta_state_prev):
+                        T_surf_t = float(theta_state_prev[r_ext])
+                    else:
+                        T_surf_t = T_out_t
+                    h_ce_t[Eli] = _dynamic_external_convection_h(
+                        surface=building_object["building_surface"][Eli],
+                        T_surf_C=T_surf_t,
+                        T_air_C=T_out_t,
+                        u_wind_ms=u_wind,
+                        model=win_h_ce_model,
+                        h_min=win_h_ce_min,
+                        fallback_h_ce=float(heat_convective_elements_external_tab[Eli]),
+                    )
+                return h_ce_t
 
             def _compute_h_ci_internal_t(theta_air_prev: float, theta_state_prev: np.ndarray) -> np.ndarray:
                 h_ci_t = heat_convective_elements_internal_tab.copy()
@@ -7413,6 +7808,10 @@ class ISO52016:
         I_sol_dir_el = np.zeros((_Tstepn_c2, bui_eln), dtype=float)
         I_sol_tot_el = np.zeros((_Tstepn_c2, bui_eln), dtype=float)
         F_sh_el      = np.ones((_Tstepn_c2, bui_eln), dtype=float)
+        # AIB change 1: solar incidence angle per element, for the Karlsson-Roos
+        # angular correction. 90 deg means "beam parallel to the surface", which
+        # yields F_W,dir = 0, so it is the safe default when the column is absent.
+        theta_inc_el = np.full((_Tstepn_c2, bui_eln), 90.0, dtype=float)
         for _c2_Eli in range(bui_eln):
             _c2_ori  = orientation_elements[_c2_Eli]
             _c2_dif  = f"I_sol_dif_{_c2_ori}"
@@ -7429,6 +7828,11 @@ class ISO52016:
             if _c2_tot in sim_df.columns:
                 I_sol_tot_el[:, _c2_Eli] = (
                     pd.to_numeric(sim_df[_c2_tot], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+                )
+            _c2_theta = f"theta_inc_{_c2_ori}"
+            if _c2_theta in sim_df.columns:
+                theta_inc_el[:, _c2_Eli] = (
+                    pd.to_numeric(sim_df[_c2_theta], errors="coerce").fillna(90.0).to_numpy(dtype=float)
                 )
             _c2_wincol = win_col_for_index.get(_c2_Eli)
             if _c2_wincol and _c2_wincol in sim_df.columns:
@@ -7543,8 +7947,30 @@ class ISO52016:
                             Ffr_wi = 0.25 # <- to modify with shading calculation annex F. o.25 is a good approximation
                             F_sh_obst_wi_t = F_sh_el[Tstepi, Eli] if g_gl_wi_t[Eli] != 0 else 1.0
 
+                            # AIB change 1: solar-angle dependent correction on
+                            # g_win. Without it the model admits the full
+                            # normal-incidence g at every sun position, which
+                            # over-admits solar heat at steep incidence where
+                            # the glazing is in fact strongly reflective.
+                            # Opaque elements carry g = 0 here, so the factor is
+                            # only ever applied to transparent surfaces.
+                            if win_angular_model != "none" and g_gl_wi_t[Eli] != 0.0:
+                                F_w_wi_t = window_solar_correction_factor(
+                                    building_object["building_surface"][Eli]
+                                    if isinstance(building_object, dict)
+                                    else {},
+                                    theta_deg=theta_inc_el[Tstepi, Eli],
+                                    i_sol_dif=I_sol_dif_el[Tstepi, Eli],
+                                    i_sol_dir=I_sol_dir_el[Tstepi, Eli],
+                                    f_sh_obst=F_sh_obst_wi_t,
+                                    model=win_angular_model,
+                                )
+                            else:
+                                F_w_wi_t = 1.0
+
                             Phi_sol_dir_zt_t += (
                                 g_gl_wi_t[Eli]
+                                * F_w_wi_t
                                 * cls._solar_irradiance_after_method1_shading(
                                     I_sol_dif_el[Tstepi, Eli],
                                     I_sol_dir_el[Tstepi, Eli],
@@ -7707,6 +8133,11 @@ class ISO52016:
                         theta_state_prev=Theta_old,
                         tstep=Tstepi,
                     )
+                    # AIB change 1: wind-dependent external film on windows only.
+                    heat_convective_elements_external_t = _compute_h_ce_window_t(
+                        theta_state_prev=Theta_old,
+                        tstep=Tstepi,
+                    )
                     Ah_ci_t = float(
                         (
                             area_elements[surf_has_node]
@@ -7789,7 +8220,7 @@ class ISO52016:
                                     '''
                                     if h_re_model == "dynamic":
                                         XTemp = (
-                                            heat_convective_elements_external[Eli] * T2m_arr[Tstepi]
+                                            heat_convective_elements_external_t[Eli] * T2m_arr[Tstepi]
                                             + heat_radiative_elements_external_t[Eli] * ext_rad_ref_temp_t[Eli]
                                             + a_sol_pli_eli[Pli, Eli] * I_sol_tot_el[Tstepi, Eli]
                                         )
@@ -7800,7 +8231,7 @@ class ISO52016:
                                             * delta_Theta_er
                                         )
                                         XTemp = (
-                                            (heat_convective_elements_external[Eli] + heat_radiative_elements_external_t[Eli])
+                                            (heat_convective_elements_external_t[Eli] + heat_radiative_elements_external_t[Eli])
                                             * T2m_arr[Tstepi]
                                             - phi_sky_eli_t
                                             + a_sol_pli_eli[Pli, Eli] * I_sol_tot_el[Tstepi, Eli]
@@ -7820,12 +8251,12 @@ class ISO52016:
                                         if list_adj_zones > 1:
                                             name_adj_zone = name_adjacent_zones[Eli]
                                             XTemp = (
-                                                (heat_convective_elements_external[Eli] + heat_radiative_elements_external_t[Eli])
+                                                (heat_convective_elements_external_t[Eli] + heat_radiative_elements_external_t[Eli])
                                                 * theta_ztu_df[name_adj_zone].iloc[Tstepi]
                                             )
                                         else:
                                             XTemp = (
-                                                (heat_convective_elements_external[Eli] + heat_radiative_elements_external_t[Eli])
+                                                (heat_convective_elements_external_t[Eli] + heat_radiative_elements_external_t[Eli])
                                                 * theta_ztu[Tstepi]
                                             )
                                     
@@ -7871,13 +8302,13 @@ class ISO52016:
                                 
                                 if Type_eli[Eli] == "EXT":
                                     MatA[ri, ci] += (
-                                        heat_convective_elements_external[Eli]+ 
+                                        heat_convective_elements_external_t[Eli]+ 
                                         heat_radiative_elements_external_t[Eli]
                                     )
                                 
                                 elif Type_eli[Eli] == "ADJ":
                                     MatA[ri, ci] += (
-                                        heat_convective_elements_external[Eli]+ 
+                                        heat_convective_elements_external_t[Eli]+ 
                                         heat_radiative_elements_external_t[Eli]
                                     )
                                 
@@ -8442,6 +8873,28 @@ class ISO52016:
             building_object,
             kwargs.get("external_emissivity_default", None),
         )
+        # --- AIB change 1: dynamic window properties ------------------------
+        dyn_win = _resolve_dynamic_window_properties(
+            building_object, kwargs.get("dynamic_window_properties", None)
+        )
+        win_angular_model = (
+            _resolve_window_angular_model(
+                building_object, kwargs.get("window_angular_solar_model", None)
+            )
+            if dyn_win
+            else "none"
+        )
+        win_h_ce_model = (
+            _resolve_window_convection_model(
+                building_object, kwargs.get("window_convection_model", None)
+            )
+            if dyn_win
+            else "table"
+        )
+        win_h_ce_min = _resolve_external_convection_h_min(
+            building_object, kwargs.get("external_convection_h_min", None)
+        )
+        # --------------------------------------------------------------------
         
         i = 1
         with tqdm(total=12) as pbar:
@@ -8675,6 +9128,73 @@ class ISO52016:
                 heat_radiative_elements_external,
                 dtype=float,
             )
+            # AIB change 1: baseline (constant) external convective coefficients,
+            # kept as the fallback for every surface the window model does not
+            # touch.
+            heat_convective_elements_external_tab = np.asarray(
+                heat_convective_elements_external,
+                dtype=float,
+            )
+            # Index of the transparent elements, i.e. the only ones whose
+            # external film is made wind dependent by this change.
+            surf_is_window = np.array(
+                [
+                    bool(
+                        isinstance(building_object, dict)
+                        and building_object["building_surface"][_i].get("type") == "transparent"
+                    )
+                    for _i in range(bui_eln)
+                ],
+                dtype=bool,
+            )
+
+            def _compute_h_ce_window_t(theta_state_prev: np.ndarray, tstep: int) -> np.ndarray:
+                """
+                External convective coefficient per element for one time step.
+
+                Only transparent elements are made dynamic here; every other
+                surface keeps the constant ISO 13789 value. That restriction is
+                what makes this branch isolate the *window* effect: extending
+                the same treatment to opaque surfaces is change 2.
+
+                Note on why R_c is left alone: the rated U_win was measured
+                against standard film resistances, so the subtraction that
+                recovers the construction-only resistance in
+                ``Conductance_node_of_element`` must keep using the standard
+                value. Holding R_c fixed while letting the external film float
+                is exactly R_win(t) = 1/U_win(t) - R_si - R_se(t): the effective
+                window U rises in wind, falls in calm air, and returns to the
+                rated value at 4 m/s.
+                """
+                h_ce_t = heat_convective_elements_external_tab.copy()
+                if win_h_ce_model == "table" or not isinstance(building_object, dict):
+                    return h_ce_t
+
+                u_wind = float(WS10m_arr[tstep])
+                T_out_t = float(T2m_arr[tstep])
+                for Eli in range(bui_eln):
+                    if not surf_is_window[Eli]:
+                        continue
+                    # Ground-contact and adiabatic elements are never wind
+                    # exposed; an external convective coefficient on them is
+                    # meaningless.
+                    if Type_eli[Eli] != "EXT":
+                        continue
+                    r_ext = surf_ext_row[Eli] if surf_has_node[Eli] else -1
+                    if 0 <= r_ext < len(theta_state_prev):
+                        T_surf_t = float(theta_state_prev[r_ext])
+                    else:
+                        T_surf_t = T_out_t
+                    h_ce_t[Eli] = _dynamic_external_convection_h(
+                        surface=building_object["building_surface"][Eli],
+                        T_surf_C=T_surf_t,
+                        T_air_C=T_out_t,
+                        u_wind_ms=u_wind,
+                        model=win_h_ce_model,
+                        h_min=win_h_ce_min,
+                        fallback_h_ce=float(heat_convective_elements_external_tab[Eli]),
+                    )
+                return h_ce_t
 
             def _compute_h_ci_internal_t(theta_air_prev: float, theta_state_prev: np.ndarray) -> np.ndarray:
                 h_ci_t = heat_convective_elements_internal_tab.copy()
@@ -8940,6 +9460,10 @@ class ISO52016:
         I_sol_dir_el = np.zeros((_Tstepn_c2, bui_eln), dtype=float)
         I_sol_tot_el = np.zeros((_Tstepn_c2, bui_eln), dtype=float)
         F_sh_el      = np.ones((_Tstepn_c2, bui_eln), dtype=float)
+        # AIB change 1: solar incidence angle per element, for the Karlsson-Roos
+        # angular correction. 90 deg means "beam parallel to the surface", which
+        # yields F_W,dir = 0, so it is the safe default when the column is absent.
+        theta_inc_el = np.full((_Tstepn_c2, bui_eln), 90.0, dtype=float)
         for _c2_Eli in range(bui_eln):
             _c2_ori  = orientation_elements[_c2_Eli]
             _c2_dif  = f"I_sol_dif_{_c2_ori}"
@@ -8956,6 +9480,11 @@ class ISO52016:
             if _c2_tot in sim_df.columns:
                 I_sol_tot_el[:, _c2_Eli] = (
                     pd.to_numeric(sim_df[_c2_tot], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+                )
+            _c2_theta = f"theta_inc_{_c2_ori}"
+            if _c2_theta in sim_df.columns:
+                theta_inc_el[:, _c2_Eli] = (
+                    pd.to_numeric(sim_df[_c2_theta], errors="coerce").fillna(90.0).to_numpy(dtype=float)
                 )
             _c2_wincol = win_col_for_index.get(_c2_Eli)
             if _c2_wincol and _c2_wincol in sim_df.columns:
@@ -9109,8 +9638,30 @@ class ISO52016:
                             Ffr_wi = 0.25 # <- to modify with shading calculation annex F. o.25 is a good approximation
                             F_sh_obst_wi_t = F_sh_el[Tstepi, Eli] if g_gl_wi_t[Eli] != 0 else 1.0
 
+                            # AIB change 1: solar-angle dependent correction on
+                            # g_win. Without it the model admits the full
+                            # normal-incidence g at every sun position, which
+                            # over-admits solar heat at steep incidence where
+                            # the glazing is in fact strongly reflective.
+                            # Opaque elements carry g = 0 here, so the factor is
+                            # only ever applied to transparent surfaces.
+                            if win_angular_model != "none" and g_gl_wi_t[Eli] != 0.0:
+                                F_w_wi_t = window_solar_correction_factor(
+                                    building_object["building_surface"][Eli]
+                                    if isinstance(building_object, dict)
+                                    else {},
+                                    theta_deg=theta_inc_el[Tstepi, Eli],
+                                    i_sol_dif=I_sol_dif_el[Tstepi, Eli],
+                                    i_sol_dir=I_sol_dir_el[Tstepi, Eli],
+                                    f_sh_obst=F_sh_obst_wi_t,
+                                    model=win_angular_model,
+                                )
+                            else:
+                                F_w_wi_t = 1.0
+
                             Phi_sol_dir_zt_t += (
                                 g_gl_wi_t[Eli]
+                                * F_w_wi_t
                                 * cls._solar_irradiance_after_method1_shading(
                                     I_sol_dif_el[Tstepi, Eli],
                                     I_sol_dir_el[Tstepi, Eli],
@@ -9273,6 +9824,11 @@ class ISO52016:
                         theta_state_prev=Theta_old,
                         tstep=Tstepi,
                     )
+                    # AIB change 1: wind-dependent external film on windows only.
+                    heat_convective_elements_external_t = _compute_h_ce_window_t(
+                        theta_state_prev=Theta_old,
+                        tstep=Tstepi,
+                    )
                     Ah_ci_t = float(
                         (
                             area_elements[surf_has_node]
@@ -9355,7 +9911,7 @@ class ISO52016:
                                     '''
                                     if h_re_model == "dynamic":
                                         XTemp = (
-                                            heat_convective_elements_external[Eli] * T2m_arr[Tstepi]
+                                            heat_convective_elements_external_t[Eli] * T2m_arr[Tstepi]
                                             + heat_radiative_elements_external_t[Eli] * ext_rad_ref_temp_t[Eli]
                                             + a_sol_pli_eli[Pli, Eli] * I_sol_tot_el[Tstepi, Eli]
                                         )
@@ -9366,7 +9922,7 @@ class ISO52016:
                                             * delta_Theta_er
                                         )
                                         XTemp = (
-                                            (heat_convective_elements_external[Eli] + heat_radiative_elements_external_t[Eli])
+                                            (heat_convective_elements_external_t[Eli] + heat_radiative_elements_external_t[Eli])
                                             * T2m_arr[Tstepi]
                                             - phi_sky_eli_t
                                             + a_sol_pli_eli[Pli, Eli] * I_sol_tot_el[Tstepi, Eli]
@@ -9386,12 +9942,12 @@ class ISO52016:
                                         if list_adj_zones > 1:
                                             name_adj_zone = name_adjacent_zones[Eli]
                                             XTemp = (
-                                                (heat_convective_elements_external[Eli] + heat_radiative_elements_external_t[Eli])
+                                                (heat_convective_elements_external_t[Eli] + heat_radiative_elements_external_t[Eli])
                                                 * theta_ztu_df[name_adj_zone].iloc[Tstepi]
                                             )
                                         else:
                                             XTemp = (
-                                                (heat_convective_elements_external[Eli] + heat_radiative_elements_external_t[Eli])
+                                                (heat_convective_elements_external_t[Eli] + heat_radiative_elements_external_t[Eli])
                                                 * theta_ztu[Tstepi]
                                             )
                                     
@@ -9437,13 +9993,13 @@ class ISO52016:
                                 
                                 if Type_eli[Eli] == "EXT":
                                     MatA[ri, ci] += (
-                                        heat_convective_elements_external[Eli]+ 
+                                        heat_convective_elements_external_t[Eli]+ 
                                         heat_radiative_elements_external_t[Eli]
                                     )
                                 
                                 elif Type_eli[Eli] == "ADJ":
                                     MatA[ri, ci] += (
-                                        heat_convective_elements_external[Eli]+ 
+                                        heat_convective_elements_external_t[Eli]+ 
                                         heat_radiative_elements_external_t[Eli]
                                     )
                                 
