@@ -204,4 +204,122 @@ Reading these:
 
 ## Change 2 — Wind-dependent surface heat transfer coefficients
 
-See the `claude/window-plus-dynamic-hce-anjro8` branch.
+Layered on top of change 1: the same wind-dependent external film, extended from
+windows to **every air-exposed surface**.
+
+### Severity
+**Medium–High** — biases transmission losses on all air-exposed surfaces. The
+effect is far larger than change 1 on the annual bottom line, because opaque
+envelope area dominates glazing area in this archetype (and in most buildings).
+
+### Applies to
+Both single-zone cores, as change 1. Opaque and transparent elements now carry
+**separate model selectors**, so setting the opaque model back to `table`
+recovers change-1-only behaviour exactly — which is what makes the two changes
+separately measurable.
+
+### Root cause
+EN ISO 52016-1 mandates constant surface heat transfer coefficients taken from
+EN ISO 13789 §9.5 (consistent with the surface resistances in ISO 6946). Those
+constants rest on two frozen assumptions: a linearised radiative exchange, and a
+**fixed 4 m/s wind speed**.
+
+The 20 W/(m²K) external convective constant is exactly `4·v + 4` evaluated at
+`v = 4 m/s`. Wherever local wind differs from 4 m/s — which is most hours in most
+climates — the standard misstates external convection, and makes transmission
+overly sensitive to outdoor temperature. De Luca et al. (2020) measured
+heating-load RMSD falling from 1.23 to 0.58 W·m⁻² on replacing the fixed value
+with a wind-dependent one.
+
+### Fix
+The hourly external-node coupling uses `h_ce = 4 + 4·v` (Magni et al. 2022,
+Eq. 2-7) for all `EXT` surfaces. As in change 1:
+
+* `R_c` in `Conductance_node_of_element` is **left at the ISO constant** — it is
+  needed to recover the construction-only resistance from the rated U-value, and
+  is ISO-compliant as-is.
+* `GR` (ground-contact) and `AD` (adiabatic) elements are excluded: they are not
+  wind exposed.
+
+Upstream already ships `_dynamic_external_convection_h` with the DOE-2, MoWiTT,
+BLAST and simple-combined correlations, and already wires it into the multizone
+free-floating engine — but the single-zone engine never used it. This change is
+therefore largely a **port of existing upstream physics** into the single-zone
+engine, plus the default flip, rather than new correlations.
+
+### Configuration
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `dynamic_surface_heat_transfer` | `True` | Master switch for change 2. `False` gives change-1-only behaviour. |
+| `external_convection_model` | `simplecombined` | Opaque surfaces. Also `doe2`, `mowitt`, `blast`, `table`. Upstream's option names are reused, so an explicitly configured value still wins. |
+| `external_convection_h_min` | `2.0` | Floor on `h_ce`, so a dead-calm hour cannot produce a near-zero coupling. |
+
+### Validation
+
+Three exact-reproduction tests, all passing:
+
+1. **Reduces to change 1.** With `dynamic_surface_heat_transfer=False`, all 288
+   metrics match the change-1 branch *exactly*.
+2. **Collapses onto the ISO constant at 4 m/s.** With `WS10m` forced to 4.0 and
+   the angular model off, all 288 metrics match the **baseline** engine exactly
+   — now with *every* surface dynamic, not just windows.
+3. **Solar is untouched.** Solar gains are bit-identical between change 1 and
+   change 2 (0.00 % difference), confirming change 2 is purely a surface
+   coefficient change.
+
+Upstream test suite: **289 passed, 2 failed, 10 skipped** — identical to
+baseline; the two failures are the same pre-existing network ones.
+AIB unit tests: **52 passing** (32 from change 1 + 20 new).
+
+### Measured effect
+
+Same case as change 1 (Archetype_ITA_SFH_2010, Milan 2020 EPW).
+
+| Metric (kWh) | Baseline | Change 1 | Change 2 | C1 vs base | C2 vs C1 | C2 vs base |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Annual heating need | 34732.0 | 34625.3 | 33043.6 | −0.31 % | **−4.57 %** | −4.86 % |
+| Annual cooling need | 4258.4 | 4228.8 | 5384.7 | −0.69 % | **+27.33 %** | +26.45 % |
+| Solar gains | 3289.6 | 2929.6 | 2929.6 | −10.94 % | 0.00 % | −10.94 % |
+| Window transm. loss | 2612.0 | 2382.4 | 2421.1 | −8.79 % | +1.62 % | −7.31 % |
+| Window transm. gain | 471.3 | 586.0 | 563.5 | +24.34 % | −3.85 % | +19.56 % |
+| Opaque transm. loss | 31712.4 | 31856.4 | 30184.4 | +0.45 % | **−5.25 %** | −4.82 % |
+| Opaque transm. gain | 3812.2 | 3721.3 | 4850.3 | −2.39 % | **+30.34 %** | +27.23 % |
+| Total transm. loss | 33857.2 | 33730.3 | 32104.0 | −0.37 % | −4.82 % | −5.18 % |
+| Ventilation loss | 2613.3 | 2610.1 | 2613.7 | −0.12 % | +0.14 % | +0.01 % |
+
+Reading these:
+
+* **Change 2 dominates change 1 on the bottom line.** Heating falls 4.6 % and
+  cooling rises 27 % from change 2 alone, against sub-1 % for change 1. Opaque
+  envelope area is simply much larger than glazing area, so the same physics
+  applied to opaque surfaces moves far more energy.
+* **Direction is set by the climate.** Milan's mean wind is 2.65 m/s with 77.7 %
+  of hours below 4 m/s, so mean `h_ce` is 14.6 rather than 20 W/(m²K). The
+  envelope is better insulated on its outer face than the ISO assumes, hence
+  lower heating demand and — the same mechanism working against you in summer —
+  substantially worse heat rejection and higher cooling demand.
+* **Cooling is where this bites.** The +27 % cooling change is the headline
+  result, and matches the expectation that a wind-dependent `h_ce` matters most
+  in cooling and in windy or cooling-weighted climates. For a Melbourne-type run
+  this is the term to watch.
+
+### Caveats
+
+* The **unadjusted `WS10m`** caveat from change 1 applies with more force here,
+  because it now affects the whole envelope. `4 + 4·v` wants wind at the surface;
+  EPW reports it at 10 m in open terrain. EnergyPlus applies a terrain/height
+  reduction first, and a sheltered wall sees far less than the met-station wind.
+  Raw `WS10m` reproduces the Magni convention exactly, which is why it is the
+  starting point, but a terrain factor is the clear next step — and given the
+  magnitude of the cooling shift, it should be quantified before these numbers
+  are used for anything load-bearing.
+* The **radiative** constant `radiative_heat_transfer_coefficient_external =
+  4.14` is the other half of the ISO's frozen assumptions (linearised radiative
+  exchange, entangled with the sky-longwave term De Luca found coupled to this
+  one). It is deliberately **not** changed here. Upstream already provides
+  `_dynamic_external_radiative_h_and_ref` and a `dynamic` `h_re` model, so this
+  is a natural change 3 on a further branch.
+* Only the **single-zone** engine is modified. The multizone engine retains
+  upstream behaviour, where a dynamic `h_ce` is available but defaults to
+  `table`.

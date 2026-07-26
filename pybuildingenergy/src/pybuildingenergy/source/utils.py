@@ -2063,6 +2063,58 @@ def _resolve_window_convection_model(building_object, override=None) -> str:
     )
 
 
+def _resolve_dynamic_surface_heat_transfer(building_object, override=None) -> bool:
+    """
+    Master switch for AIB change 2: extend the wind-dependent external
+    convective coefficient from windows to every air-exposed surface.
+
+    Defaults to True on this branch, so running an unmodified example script
+    exercises the change; set ``dynamic_surface_heat_transfer = False`` to fall
+    back to change-1-only behaviour without switching branches.
+    """
+    if override is not None:
+        return bool(override)
+    raw = _lookup_simulation_option(
+        building_object,
+        (
+            "dynamic_surface_heat_transfer",
+            "dynamic_surface_coefficients",
+            "dynamic_h_ce",
+        ),
+        default=True,
+    )
+    if isinstance(raw, str):
+        return raw.strip().lower() not in {"false", "0", "no", "off", "none"}
+    return bool(raw)
+
+
+def _resolve_opaque_convection_model(building_object, override=None) -> str:
+    """
+    External convection model for opaque air-exposed surfaces.
+
+    Upstream's ``_resolve_external_convection_model`` already reads the same
+    option names and is used by the multizone engine, but it defaults to
+    'table' (the ISO constant). This wrapper keeps the option names identical
+    while defaulting to 'simplecombined' so change 2 is active out of the box;
+    an explicitly configured value still wins.
+    """
+    if override is not None:
+        return _normalize_external_convection_model(override)
+    configured = _lookup_simulation_option(
+        building_object,
+        (
+            "external_convection_model",
+            "h_ce_model",
+            "convective_external_model",
+            "external_convection_algorithm",
+            "opaque_convection_model",
+        ),
+    )
+    if configured is not None:
+        return _normalize_external_convection_model(configured)
+    return "simplecombined"
+
+
 def _window_glazing_panes(surface: dict) -> int:
     """Number of glazing panes, used to pick a default coefficient set."""
     if not isinstance(surface, dict):
@@ -7257,6 +7309,17 @@ class ISO52016:
         win_h_ce_min = _resolve_external_convection_h_min(
             building_object, kwargs.get("external_convection_h_min", None)
         )
+        # --- AIB change 2: wind-dependent h_ce on opaque surfaces too --------
+        dyn_surf = _resolve_dynamic_surface_heat_transfer(
+            building_object, kwargs.get("dynamic_surface_heat_transfer", None)
+        )
+        opaque_h_ce_model = (
+            _resolve_opaque_convection_model(
+                building_object, kwargs.get("external_convection_model", None)
+            )
+            if dyn_surf
+            else "table"
+        )
         # --------------------------------------------------------------------
         i = 1
         with tqdm(total=12) as pbar:
@@ -7504,33 +7567,40 @@ class ISO52016:
                 """
                 External convective coefficient per element for one time step.
 
-                Only transparent elements are made dynamic here; every other
-                surface keeps the constant ISO 13789 value. That restriction is
-                what makes this branch isolate the *window* effect: extending
-                the same treatment to opaque surfaces is change 2.
+                Change 1 made this dynamic for transparent elements only.
+                Change 2 extends the same treatment to every air-exposed
+                surface, because the ISO constant is no more defensible on a
+                wall than on a window: 20 W/(m2 K) is simply 4*v + 4 evaluated
+                at the 4 m/s that EN ISO 13789 section 9.5 freezes in.
 
-                Note on why R_c is left alone: the rated U_win was measured
-                against standard film resistances, so the subtraction that
-                recovers the construction-only resistance in
-                ``Conductance_node_of_element`` must keep using the standard
-                value. Holding R_c fixed while letting the external film float
-                is exactly R_win(t) = 1/U_win(t) - R_si - R_se(t): the effective
-                window U rises in wind, falls in calm air, and returns to the
-                rated value at 4 m/s.
+                Windows and opaque elements keep separate model selectors, so
+                the two effects stay separable: setting the opaque model back
+                to 'table' recovers change-1-only behaviour exactly.
+
+                Note on why R_c is left alone: the rated U was measured against
+                standard film resistances, so the subtraction that recovers the
+                construction-only resistance in ``Conductance_node_of_element``
+                must keep using the standard value. Holding R_c fixed while
+                letting the external film float is exactly
+                R(t) = 1/U(t) - R_si - R_se(t): the effective U rises in wind,
+                falls in calm air, and returns to the rated value at 4 m/s.
                 """
                 h_ce_t = heat_convective_elements_external_tab.copy()
-                if win_h_ce_model == "table" or not isinstance(building_object, dict):
+                if not isinstance(building_object, dict):
+                    return h_ce_t
+                if win_h_ce_model == "table" and opaque_h_ce_model == "table":
                     return h_ce_t
 
                 u_wind = float(WS10m_arr[tstep])
                 T_out_t = float(T2m_arr[tstep])
                 for Eli in range(bui_eln):
-                    if not surf_is_window[Eli]:
-                        continue
                     # Ground-contact and adiabatic elements are never wind
                     # exposed; an external convective coefficient on them is
-                    # meaningless.
+                    # meaningless, so they keep their existing treatment.
                     if Type_eli[Eli] != "EXT":
+                        continue
+                    model_eli = win_h_ce_model if surf_is_window[Eli] else opaque_h_ce_model
+                    if model_eli == "table":
                         continue
                     r_ext = surf_ext_row[Eli] if surf_has_node[Eli] else -1
                     if 0 <= r_ext < len(theta_state_prev):
@@ -7542,7 +7612,7 @@ class ISO52016:
                         T_surf_C=T_surf_t,
                         T_air_C=T_out_t,
                         u_wind_ms=u_wind,
-                        model=win_h_ce_model,
+                        model=model_eli,
                         h_min=win_h_ce_min,
                         fallback_h_ce=float(heat_convective_elements_external_tab[Eli]),
                     )
@@ -8894,6 +8964,17 @@ class ISO52016:
         win_h_ce_min = _resolve_external_convection_h_min(
             building_object, kwargs.get("external_convection_h_min", None)
         )
+        # --- AIB change 2: wind-dependent h_ce on opaque surfaces too --------
+        dyn_surf = _resolve_dynamic_surface_heat_transfer(
+            building_object, kwargs.get("dynamic_surface_heat_transfer", None)
+        )
+        opaque_h_ce_model = (
+            _resolve_opaque_convection_model(
+                building_object, kwargs.get("external_convection_model", None)
+            )
+            if dyn_surf
+            else "table"
+        )
         # --------------------------------------------------------------------
         
         i = 1
@@ -9152,33 +9233,40 @@ class ISO52016:
                 """
                 External convective coefficient per element for one time step.
 
-                Only transparent elements are made dynamic here; every other
-                surface keeps the constant ISO 13789 value. That restriction is
-                what makes this branch isolate the *window* effect: extending
-                the same treatment to opaque surfaces is change 2.
+                Change 1 made this dynamic for transparent elements only.
+                Change 2 extends the same treatment to every air-exposed
+                surface, because the ISO constant is no more defensible on a
+                wall than on a window: 20 W/(m2 K) is simply 4*v + 4 evaluated
+                at the 4 m/s that EN ISO 13789 section 9.5 freezes in.
 
-                Note on why R_c is left alone: the rated U_win was measured
-                against standard film resistances, so the subtraction that
-                recovers the construction-only resistance in
-                ``Conductance_node_of_element`` must keep using the standard
-                value. Holding R_c fixed while letting the external film float
-                is exactly R_win(t) = 1/U_win(t) - R_si - R_se(t): the effective
-                window U rises in wind, falls in calm air, and returns to the
-                rated value at 4 m/s.
+                Windows and opaque elements keep separate model selectors, so
+                the two effects stay separable: setting the opaque model back
+                to 'table' recovers change-1-only behaviour exactly.
+
+                Note on why R_c is left alone: the rated U was measured against
+                standard film resistances, so the subtraction that recovers the
+                construction-only resistance in ``Conductance_node_of_element``
+                must keep using the standard value. Holding R_c fixed while
+                letting the external film float is exactly
+                R(t) = 1/U(t) - R_si - R_se(t): the effective U rises in wind,
+                falls in calm air, and returns to the rated value at 4 m/s.
                 """
                 h_ce_t = heat_convective_elements_external_tab.copy()
-                if win_h_ce_model == "table" or not isinstance(building_object, dict):
+                if not isinstance(building_object, dict):
+                    return h_ce_t
+                if win_h_ce_model == "table" and opaque_h_ce_model == "table":
                     return h_ce_t
 
                 u_wind = float(WS10m_arr[tstep])
                 T_out_t = float(T2m_arr[tstep])
                 for Eli in range(bui_eln):
-                    if not surf_is_window[Eli]:
-                        continue
                     # Ground-contact and adiabatic elements are never wind
                     # exposed; an external convective coefficient on them is
-                    # meaningless.
+                    # meaningless, so they keep their existing treatment.
                     if Type_eli[Eli] != "EXT":
+                        continue
+                    model_eli = win_h_ce_model if surf_is_window[Eli] else opaque_h_ce_model
+                    if model_eli == "table":
                         continue
                     r_ext = surf_ext_row[Eli] if surf_has_node[Eli] else -1
                     if 0 <= r_ext < len(theta_state_prev):
@@ -9190,7 +9278,7 @@ class ISO52016:
                         T_surf_C=T_surf_t,
                         T_air_C=T_out_t,
                         u_wind_ms=u_wind,
-                        model=win_h_ce_model,
+                        model=model_eli,
                         h_min=win_h_ce_min,
                         fallback_h_ce=float(heat_convective_elements_external_tab[Eli]),
                     )
