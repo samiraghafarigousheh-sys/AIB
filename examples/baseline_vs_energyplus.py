@@ -703,20 +703,27 @@ def _sankey_chart(sankey_data: dict, outdir: Path) -> None:
 
     Sankey data structure: {"sources": [...], "targets": [...], "values": [...]}
     """
-    if not sankey_data or "sources" not in sankey_data:
-        return  # Skip if no Sankey data available
+    if not sankey_data:
+        print("note: Sankey data not available (engine may not support it)")
+        return
+
+    sources = sankey_data.get("sources", [])
+    targets = sankey_data.get("targets", [])
+    values = sankey_data.get("values", [])
+
+    if not sources or not targets or not values:
+        print(f"note: Sankey data incomplete — sources:{len(sources)}, "
+              f"targets:{len(targets)}, values:{len(values)}")
+        return
 
     try:
         import plotly.graph_objects as go
-        import plotly.io as pio
+    except ImportError:
+        print("note: Sankey diagram skipped (plotly not installed; "
+              "run: pip install plotly)")
+        return
 
-        sources = sankey_data.get("sources", [])
-        targets = sankey_data.get("targets", [])
-        values = sankey_data.get("values", [])
-
-        if not sources or not targets or not values:
-            return
-
+    try:
         # Create color palette for nodes
         unique_nodes = list(dict.fromkeys(sources + targets))
         node_colors = {
@@ -754,6 +761,7 @@ def _sankey_chart(sankey_data: dict, outdir: Path) -> None:
             margin=dict(l=20, r=20, t=50, b=20),
         )
 
+        outdir.mkdir(parents=True, exist_ok=True)
         out_html = outdir / "sankey_pybuildingenergy.html"
         fig.write_html(str(out_html))
         print(f"sankey   -> {out_html}")
@@ -763,11 +771,11 @@ def _sankey_chart(sankey_data: dict, outdir: Path) -> None:
         try:
             fig.write_image(str(out_png), width=1000, height=600)
             print(f"sankey   -> {out_png}")
-        except Exception:
+        except Exception as e:
             pass  # kaleido not available, PNG skipped
 
-    except ImportError:
-        pass  # plotly not available
+    except Exception as e:
+        print(f"note: Sankey diagram generation failed: {type(e).__name__}: {str(e)[:100]}")
 
 
 # ---------------------------------------------------------------------------
