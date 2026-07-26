@@ -31,31 +31,86 @@ difference between two adjacent branches isolates exactly one change.
 A 20 m² Melbourne apartment with a single exposed (west) facade, five conditioned
 neighbours, zeroed thermal mass and ideal loads.
 
+### Run it in Google Colab
+
+Open `notebooks/AIB_apt305_colab.ipynb`, or paste this single cell into a blank
+notebook:
+
+```python
+!git clone --quiet --branch claude/window-plus-dynamic-hce-anjro8 \
+    https://github.com/samiraghafarigousheh-sys/AIB.git AIB
+%cd AIB
+!git fetch --quiet origin '+refs/heads/*:refs/remotes/origin/*'
+!git config user.email colab@example.com && git config user.name Colab
+!pip install -q -r pybuildingenergy/requirements.txt
+!python examples/compare_branches_apt305.py --outdir results/apt305
+
+import pandas as pd
+from IPython.display import Image, display
+display(pd.read_csv("results/apt305/comparison.csv"))
+display(Image("results/apt305/apt305_comparison.png"))
+```
+
+Repository: `https://github.com/samiraghafarigousheh-sys/AIB.git`
+Branch: `claude/window-plus-dynamic-hce-anjro8`
+If the repo is private, clone with a personal access token:
+`https://<TOKEN>@github.com/samiraghafarigousheh-sys/AIB.git`
+
+### Run it locally
+
 ```bash
-python examples/compare_branches_apt305.py                      # bundled stand-in weather
-python examples/compare_branches_apt305.py --weather MEL.epw    # site-correct
-python examples/compare_branches_apt305.py --weather-source pvgis
+python examples/compare_branches_apt305.py                        # auto-resolve Melbourne weather
+python examples/compare_branches_apt305.py --weather MEL.epw      # explicit EPW (validated)
+python examples/compare_branches_apt305.py --weather-source pvgis # TMY at the building's coords
 ```
 
 | File | Contents |
 | --- | --- |
 | `examples/apt305_building.py` | Building definition only — no engine import, so one dictionary feeds every engine version |
+| `examples/weather_melbourne.py` | Weather resolution + the site-validation guard |
 | `examples/compare_branches_apt305.py` | Checks out each branch into a throwaway worktree, runs it in its own subprocess, emits table + chart |
-| `results/apt305/` | Committed outputs: `comparison.csv`, `comparison.md`, `apt305_comparison.png` |
+| `notebooks/AIB_apt305_colab.ipynb` | Colab notebook |
+| `results/apt305/` | Outputs, written on each run |
 
 Each branch runs in a **separate process** because three versions of the same
 `pybuildingenergy` package cannot coexist on one `sys.path`. The building always
 comes from the current branch, so the engine is the only thing that varies.
 
-> **Weather caveat.** The proxy in this environment blocks PVGIS and every EPW
-> mirror, so no Melbourne TMY could be obtained. The committed run uses the
-> bundled **Athens** EPW (lat +37.97) as a stand-in for Melbourne (lat −37.80):
-> nearly the mirror latitude, so solar-geometry magnitude and the wind regime are
-> close — but the seasons are inverted and Athens is warmer. **The committed
-> numbers are therefore not Melbourne results.** Re-run with `--weather` pointing
-> at a Melbourne TMY, or `--weather-source pvgis`, for site-correct figures. Note
-> that when an EPW is supplied the engine takes latitude from the *file*, not from
-> the building dictionary.
+### Weather: why there is a guard
+
+The engine takes its coordinates from **two different places** depending on the
+source, and getting it wrong is silent:
+
+| Source | Coordinates come from |
+| --- | --- |
+| `weather_source="epw"` | the **EPW header** — the building dictionary's `latitude` is ignored |
+| `weather_source="pvgis"` | the **building dictionary** — site-correct by construction |
+
+So handing the Melbourne apartment an Athens EPW simulates it in Athens, with no
+warning. `examples/weather_melbourne.py` now rejects any EPW more than 1.5° from
+the building's coordinates:
+
+```
+EPW site mismatch:
+  file    : 2020_Athens.epw
+  station : Athinai at lat 37.967, lon 23.717
+  building: Melbourne at lat -37.800, lon 144.968
+  offset  : 143.0 deg (limit 1.5)
+```
+
+`--allow-site-mismatch` overrides it deliberately; results are then labelled with
+the EPW's own location.
+
+Resolution order is: explicit `--weather` (validated) → cached EPW under
+`weather_cache/` → download from public TMY mirrors → PVGIS at the building's own
+lat/lon. If none is reachable the run **fails with instructions** rather than
+substituting another city.
+
+> **No results are committed.** This sandbox blocks PVGIS, `climate.onebuilding.org`
+> and every EPW mirror (only `raw.githubusercontent.com` is reachable), so no
+> Melbourne TMY could be obtained here and no Melbourne figures have been produced.
+> The pipeline itself is verified end to end; run the Colab notebook, which has open
+> network, to generate real Melbourne numbers.
 
 ## Reference case
 

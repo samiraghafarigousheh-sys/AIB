@@ -107,9 +107,24 @@ def run_worker(args) -> int:
 # ---------------------------------------------------------------------------
 
 def make_worktree(branch: str, dest: Path) -> None:
-    subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "worktree", "add", "--detach", str(dest), branch],
-        check=True, capture_output=True, text=True,
+    """
+    Check a branch out into a throwaway worktree.
+
+    On a fresh clone (Colab) the sibling branches exist only as remote-tracking
+    refs, so fall back to origin/<branch> when the local name is absent.
+    """
+    for ref in (branch, f"origin/{branch}"):
+        proc = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "worktree", "add", "--detach", str(dest), ref],
+            capture_output=True, text=True,
+        )
+        if proc.returncode == 0:
+            return
+        last = proc.stderr.strip()
+    raise RuntimeError(
+        f"could not create a worktree for '{branch}'.\n{last}\n\n"
+        f"If this is a fresh clone, make sure all branches were fetched:\n"
+        f"  git fetch origin '+refs/heads/*:refs/remotes/origin/*'"
     )
 
 
@@ -348,13 +363,18 @@ def main() -> None:
     ap.add_argument("--src", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--out", default=None, help=argparse.SUPPRESS)
     ap.add_argument(
-        "--weather",
-        default=str(REPO_ROOT / "pybuildingenergy" / "examples" / "2020_Athens.epw"),
-        help="EPW file. The building is in Melbourne; supply a Melbourne TMY here "
-             "for site-correct results (see the note printed at startup).",
+        "--weather", default=None,
+        help="Explicit Melbourne EPW. Validated against the building's coordinates; "
+             "a wrong-city file is rejected rather than silently simulated.",
     )
-    ap.add_argument("--weather-source", default="epw", choices=["epw", "pvgis", "climatedata"],
-                    help="'pvgis' fetches a TMY for the building's own lat/lon (needs network).")
+    ap.add_argument("--weather-source", default="auto",
+                    choices=["auto", "epw", "pvgis"],
+                    help="'auto' (default): cached Melbourne EPW, else download one, "
+                         "else PVGIS. 'pvgis' fetches a TMY for the building's own "
+                         "lat/lon and is site-correct by construction.")
+    ap.add_argument("--allow-site-mismatch", action="store_true",
+                    help="Accept an EPW from another location. Results are then for "
+                         "that location, not Melbourne, and are labelled as such.")
     ap.add_argument("--outdir", type=Path, default=REPO_ROOT / "results" / "apt305")
     args = ap.parse_args()
 
@@ -363,19 +383,23 @@ def main() -> None:
 
     args.outdir.mkdir(parents=True, exist_ok=True)
 
-    if args.weather_source == "epw":
-        wname = Path(args.weather).name
-        subtitle = (f"Weather: {wname}  ·  ideal loads, zeroed thermal mass, "
-                    f"1.62 m² west-facing single glazing")
-        if "Athens" in wname:
-            print("\n  NOTE  The building is in Melbourne (lat -37.80). Athens (lat +37.97) is\n"
-                  "        being used as a stand-in: it is very nearly the mirror latitude, so\n"
-                  "        solar geometry magnitude and the wind regime are close, but the\n"
-                  "        seasons are inverted and it is warmer. Re-run with a Melbourne TMY\n"
-                  "        (--weather) or --weather-source pvgis for site-correct numbers.\n")
-    else:
-        subtitle = (f"Weather: {args.weather_source} TMY at lat -37.80, lon 144.968  ·  "
-                    f"ideal loads, zeroed thermal mass")
+    sys.path.insert(0, str(EXAMPLES_DIR))
+    from weather_melbourne import resolve, WeatherUnavailable
+
+    print("resolving weather…")
+    try:
+        weather_source, weather_path, weather_label = resolve(
+            args.weather, args.weather_source, args.allow_site_mismatch
+        )
+    except WeatherUnavailable as exc:
+        print(f"\nERROR  {exc}\n")
+        sys.exit(2)
+
+    args.weather_source = weather_source
+    args.weather = weather_path
+    subtitle = (f"Weather: {weather_label}  ·  ideal loads, zeroed thermal mass, "
+                f"1.62 m² west-facing single glazing")
+    print(f"  -> {weather_label}\n")
 
     results: dict[str, dict] = {}
     tmp = Path(tempfile.mkdtemp(prefix="aib-branches-"))
