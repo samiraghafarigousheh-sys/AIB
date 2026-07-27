@@ -266,6 +266,172 @@ def _resolve_ventilation_component_profile_multiplier(
     return None
 
 
+# ===============================================================================================
+#                    ENVELOPE INFILTRATION  (AIB ventilation/infiltration fix)
+# ===============================================================================================
+#
+# EN ISO 52016-1 carries a single air-exchange term, H_ve_nat, built from the
+# *designed* ventilation configuration. Unintentional air leakage through the
+# envelope is not represented at all: a leaky envelope and a sealed one produce
+# identical H_ve as long as their ventilation design matches. That understates
+# heat loss, and the error grows with envelope age because permeability is
+# strongly age-dependent.
+#
+# This adds an additive infiltration conductance H_ve_inf alongside H_ve_nat:
+#
+#   1. Age-banded default envelope permeability q50 [m3/(h*m2) @ 50 Pa], keyed on
+#      the building's construction_year band.
+#   2. q50 -> air change rate at 50 Pa:  n50 = q50 * A_envelope / V   [1/h]
+#   3. n50 -> mean natural rate via the LBL "divide-by-N" relation: n_inf = n50/N,
+#      with N a shelter/height-dependent divisor (N ~ 20 for a sheltered low-rise).
+#   4. Per-timestep modulation by the stack and wind driving forces,
+#      f = sqrt(Cs*|dT| + Cw*u^2) normalised at reference conditions, so f ~ 1 on
+#      average and its shape over the year follows the weather.
+#
+# H_ve_inf = rho*cp * V * n_inf(t) / 3600   [W/K], summed into H_ve_nat.
+
+# Envelope permeability at 50 Pa, m3/(h*m2) of envelope area, by construction age
+# band. Follows the usual European stock ranges: pre-war masonry is very leaky,
+# and permeability falls steadily as air-barrier practice tightens.
+_Q50_BY_CONSTRUCTION_AGE = {
+    "before 1900": 15.0,
+    "1901-1920": 13.0,
+    "1921-1945": 12.0,
+    "1946-1960": 11.0,
+    "1961-1875": 10.0,   # upstream spells this band '1961-1875' (sic, for 1961-1975)
+    "1961-1975": 10.0,
+    "1976-1990": 8.0,
+    "1991-2005": 6.0,
+    "2006-today": 4.0,
+}
+_Q50_DEFAULT = 6.0        # used when the band is missing or unrecognised
+
+# LBL divide-by-N divisor: converts the 50 Pa pressurisation rate to a mean
+# natural rate. 20 is the standard value for a sheltered, low-rise building.
+_LBL_N_DIVISOR = 20.0
+
+# Stack and wind coefficients for the driving-force modulation, and the reference
+# conditions at which the modulation factor equals 1.
+_INF_C_STACK = 0.015      # per K
+_INF_C_WIND = 0.001       # per (m/s)^2
+_INF_DT_REF = 10.0        # K
+_INF_U_REF = 4.0          # m/s
+
+# Volumetric heat capacity of air, W*h/(m3*K) -- rho*cp/3600.
+_RHO_CP_AIR_WH_M3K = 0.33
+
+
+def _q50_for_construction_age(building_object) -> float:
+    """Default envelope permeability q50 [m3/(h*m2) @ 50 Pa] for the building's age band."""
+    band = str(
+        (building_object.get("building", {}) or {}).get("construction_year", "") or ""
+    ).strip().lower()
+    for key, value in _Q50_BY_CONSTRUCTION_AGE.items():
+        if key.lower() == band:
+            return float(value)
+    return float(_Q50_DEFAULT)
+
+
+def _envelope_area_m2(building_object) -> float:
+    """Total envelope (opaque + transparent) area, m2, from the surface list."""
+    total = 0.0
+    for surf in building_object.get("building_surface", []) or []:
+        try:
+            total += float(surf.get("area", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _zone_volume_m3(building_object) -> float:
+    """
+    Conditioned zone volume, m3.
+
+    Prefers an explicit volume field, falling back to net_floor_area * height.
+    The fallback matters: a building may specify its ventilation as a flow rate
+    per floor area and never declare a volume, in which case the explicit fields
+    are all absent but the geometry is still fully determined.
+    """
+    _bld = building_object.get("building", {}) or {}
+    for key in ("zone_volume_m3", "zone_volume", "volume"):
+        try:
+            value = float(_bld.get(key) or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(value) and value > 0.0:
+            return value
+    try:
+        area = float(_bld.get("net_floor_area", 0.0) or 0.0)
+        height = float(_bld.get("height", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    volume = area * height
+    return float(volume) if np.isfinite(volume) and volume > 0.0 else 0.0
+
+
+def _infiltration_h_ve_inf_w_k(
+    building_object,
+    theta_int_c: float,
+    theta_ext_c: float,
+    u_wind_m_s: float,
+) -> float:
+    """
+    Additive envelope-infiltration conductance H_ve_inf [W/K] for one timestep.
+
+    Age-banded q50 -> n50 -> mean natural rate via the LBL divide-by-N relation,
+    then modulated by the instantaneous stack and wind driving forces. Returns
+    0.0 when the geometry needed to size the envelope is absent, so a building
+    without a surface list is left exactly as ISO 52016-1 computes it.
+    """
+    volume = _zone_volume_m3(building_object)
+    if volume <= 0.0:
+        return 0.0
+
+    # An explicit q50 in the ventilation config wins over the age-banded default.
+    _vent_cfg = (
+        building_object.get("building_parameters", {}) or {}
+    ).get("ventilation", {}) or {}
+    _override = _vent_cfg.get("envelope_permeability_q50")
+    if _override is not None:
+        try:
+            q50 = float(_override)
+        except (TypeError, ValueError):
+            q50 = _q50_for_construction_age(building_object)
+    else:
+        q50 = _q50_for_construction_age(building_object)
+    if not np.isfinite(q50) or q50 <= 0.0:
+        return 0.0
+
+    a_env = _envelope_area_m2(building_object)
+    if not np.isfinite(a_env) or a_env <= 0.0:
+        return 0.0
+
+    # q50 [m3/(h*m2)] -> n50 [1/h] -> mean natural infiltration rate [1/h]
+    n50 = q50 * a_env / volume
+    n_inf_mean = n50 / _LBL_N_DIVISOR
+
+    # Stack + wind modulation, normalised so f == 1 at the reference conditions.
+    try:
+        d_theta = abs(float(theta_int_c) - float(theta_ext_c))
+    except (TypeError, ValueError):
+        d_theta = _INF_DT_REF
+    if not np.isfinite(d_theta):
+        d_theta = _INF_DT_REF
+    try:
+        u_wind = float(u_wind_m_s)
+    except (TypeError, ValueError):
+        u_wind = 0.0
+    if not np.isfinite(u_wind) or u_wind < 0.0:
+        u_wind = 0.0
+
+    driving = _INF_C_STACK * d_theta + _INF_C_WIND * (u_wind ** 2)
+    reference = _INF_C_STACK * _INF_DT_REF + _INF_C_WIND * (_INF_U_REF ** 2)
+    f_mod = math.sqrt(max(driving, 0.0) / reference) if reference > 0.0 else 1.0
+
+    n_inf = n_inf_mean * f_mod
+    return float(_RHO_CP_AIR_WH_M3K * volume * n_inf)
+
+
 def _resolve_single_zone_vent_boundary(
     building_object, T_zone, Tstepi, sim_df, profile_df,
     ahu_outputs_collector=None,
@@ -7590,6 +7756,25 @@ class ISO52016:
                     )
                     H_ve_nat = _vent_bdy.heat_transfer_coefficient_w_k
                     S_ve_nat = _vent_bdy.source_term_w
+
+                    # --- AIB ventilation/infiltration fix -------------------------------
+                    # ISO 52016-1 models only the *designed* air exchange. Add the
+                    # envelope-leakage conductance on top: it is driven by the same
+                    # outdoor air, so it enters the balance exactly like H_ve_nat and
+                    # is simply summed with it.
+                    _T_ext_inf = float(pd.to_numeric(sim_df["T2m"], errors="coerce").iloc[Tstepi])
+                    _u_wind_inf = (
+                        float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[Tstepi])
+                        if "WS10m" in sim_df.columns else 0.0
+                    )
+                    H_ve_nat = float(H_ve_nat) + _infiltration_h_ve_inf_w_k(
+                        building_object,
+                        float(Theta_old[ri]),
+                        _T_ext_inf,
+                        _u_wind_inf,
+                    )
+                    # --------------------------------------------------------------------
+
                     # Record for this timestep; do NOT append here - the while
                     # loop may iterate again for HVAC re-solving and we must
                     # emit exactly one entry per timestep to keep diagnostics
@@ -9156,6 +9341,25 @@ class ISO52016:
                     )
                     H_ve_nat = _vent_bdy.heat_transfer_coefficient_w_k
                     S_ve_nat = _vent_bdy.source_term_w
+
+                    # --- AIB ventilation/infiltration fix -------------------------------
+                    # ISO 52016-1 models only the *designed* air exchange. Add the
+                    # envelope-leakage conductance on top: it is driven by the same
+                    # outdoor air, so it enters the balance exactly like H_ve_nat and
+                    # is simply summed with it.
+                    _T_ext_inf = float(pd.to_numeric(sim_df["T2m"], errors="coerce").iloc[Tstepi])
+                    _u_wind_inf = (
+                        float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[Tstepi])
+                        if "WS10m" in sim_df.columns else 0.0
+                    )
+                    H_ve_nat = float(H_ve_nat) + _infiltration_h_ve_inf_w_k(
+                        building_object,
+                        float(Theta_old[ri]),
+                        _T_ext_inf,
+                        _u_wind_inf,
+                    )
+                    # --------------------------------------------------------------------
+
                     # Record for this timestep; do NOT append here - the while
                     # loop may iterate again for HVAC re-solving and we must
                     # emit exactly one entry per timestep to keep diagnostics
