@@ -61,9 +61,32 @@ def _latent_heat_load_from_air_exchange(
     rh_ext_pct: float | None,
     rh_int_pct: float = 50.0,
     p_pa: float = P_ATM,
+    rh_int_min_pct: float | None = None,
+    rh_int_max_pct: float | None = None,
+    dt_h: float = 1.0,
+    evaporative_cooling: bool = False,
 ):
     """
     Derive moisture content and latent ventilation load from the sensible air exchange term.
+
+    AIB latent-heat fix. Four corrections to the ISO 52016-1 treatment:
+
+    * **EN 16798-1 comfort deadband.** Upstream drives the load toward a single
+      flat 50 % RH reference, so *any* departure from 50 % books latent energy --
+      including humidities that are perfectly comfortable and that no real plant
+      would spend energy correcting. EN 16798-1 instead specifies a humidity
+      *band* (typically 25-60 % RH). Latent energy is booked only for the excursion
+      beyond whichever edge of the band is crossed; inside the band the load is
+      zero.
+    * **Real timestep scaling.** ``latent_energy_wh`` assumed a 1 h timestep, so a
+      sub-hourly run silently over-counted latent energy in proportion to the
+      number of steps per hour. It now scales by ``dt_h``.
+    * **Evaporative cooling sign.** An evaporative cooler *adds* moisture as its
+      cooling mechanism, so its latent effect on the zone has the opposite sign to
+      a dehumidifying coil.
+
+    When ``rh_int_min_pct``/``rh_int_max_pct`` are both None the deadband collapses
+    to the single ``rh_int_pct`` setpoint, reproducing upstream behaviour exactly.
 
     Returns
     -------
@@ -82,11 +105,133 @@ def _latent_heat_load_from_air_exchange(
     rh_ext_pct = float(np.clip(rh_ext_pct, 0.0, 100.0))
 
     x_ext = float(_humidity_ratio_from_t_rh(theta_ext_c, rh_ext_pct, p_pa=p_pa))
-    x_int = float(_humidity_ratio_from_t_rh(theta_int_c, rh_int_pct, p_pa=p_pa))
     mass_flow_kg_s = float(h_ve_w_k) / CP_DA
-    latent_power_w = mass_flow_kg_s * L_V * (x_ext - x_int)
-    latent_energy_wh = latent_power_w  # 1 h timestep
+
+    # Resolve the comfort band. Falling back to the single setpoint on either edge
+    # keeps a partially-specified band well defined.
+    _lo = rh_int_min_pct if (rh_int_min_pct is not None and np.isfinite(rh_int_min_pct)) else None
+    _hi = rh_int_max_pct if (rh_int_max_pct is not None and np.isfinite(rh_int_max_pct)) else None
+    if _lo is None and _hi is None:
+        # Upstream behaviour: single reference humidity, no deadband.
+        x_int = float(_humidity_ratio_from_t_rh(theta_int_c, rh_int_pct, p_pa=p_pa))
+        latent_power_w = mass_flow_kg_s * L_V * (x_ext - x_int)
+    else:
+        _lo = float(np.clip(_lo if _lo is not None else rh_int_pct, 1.0, 100.0))
+        _hi = float(np.clip(_hi if _hi is not None else rh_int_pct, 1.0, 100.0))
+        if _lo > _hi:
+            _lo, _hi = _hi, _lo
+        x_lo = float(_humidity_ratio_from_t_rh(theta_int_c, _lo, p_pa=p_pa))
+        x_hi = float(_humidity_ratio_from_t_rh(theta_int_c, _hi, p_pa=p_pa))
+        if x_ext > x_hi:
+            # Too humid: dehumidify down to the upper edge of the band.
+            x_int = x_hi
+            latent_power_w = mass_flow_kg_s * L_V * (x_ext - x_hi)
+        elif x_ext < x_lo:
+            # Too dry: humidify up to the lower edge (negative = humidification).
+            x_int = x_lo
+            latent_power_w = mass_flow_kg_s * L_V * (x_ext - x_lo)
+        else:
+            # Inside the comfort band: no latent conditioning energy is spent.
+            x_int = x_ext
+            latent_power_w = 0.0
+
+    # An evaporative cooler humidifies as it cools, reversing the sign of the
+    # latent effect relative to a dehumidifying coil.
+    if evaporative_cooling:
+        latent_power_w = -latent_power_w
+
+    try:
+        _dt = float(dt_h)
+    except (TypeError, ValueError):
+        _dt = 1.0
+    if not np.isfinite(_dt) or _dt <= 0.0:
+        _dt = 1.0
+
+    latent_energy_wh = latent_power_w * _dt
     return x_ext, x_int, mass_flow_kg_s, latent_power_w, latent_energy_wh
+
+
+def _occupancy_latent_gain_w(building_object, occupancy_fraction: float = 1.0) -> float:
+    """
+    Internal latent gain from occupant moisture production [W].
+
+    ISO 52016-1 leaves the latent fraction of internal gains at 0.0 by default, so
+    occupants contribute sensible heat but no moisture at all -- which is wrong for
+    any occupied space and particularly wrong for dwellings. EN 16798-1 tabulates a
+    moisture production rate per floor area by building type; this converts that
+    rate to a latent power and scales it by the current occupancy fraction.
+    """
+    _bld = building_object.get("building", {}) or {}
+    btype = str(_bld.get("building_type_class", "") or "").strip()
+    try:
+        area = float(_bld.get("net_floor_area", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if not np.isfinite(area) or area <= 0.0:
+        return 0.0
+
+    table = getattr(iso16798_profiles, "internal_gains_occupants", {}) or {}
+    entry = table.get(btype)
+    if not isinstance(entry, dict):
+        return 0.0
+    # Upstream spells the key 'mositure_production'; accept both spellings so the
+    # fix keeps working if that typo is ever corrected.
+    rate_g_m2_h = entry.get("mositure_production", entry.get("moisture_production"))
+    try:
+        rate_g_m2_h = float(rate_g_m2_h)
+    except (TypeError, ValueError):
+        return 0.0
+    if not np.isfinite(rate_g_m2_h) or rate_g_m2_h <= 0.0:
+        return 0.0
+
+    try:
+        occ = float(occupancy_fraction)
+    except (TypeError, ValueError):
+        occ = 1.0
+    if not np.isfinite(occ) or occ < 0.0:
+        occ = 0.0
+
+    # g/(m2*h) -> kg/s over the whole floor area, then -> W via latent heat.
+    mass_flow_kg_s = (rate_g_m2_h * area * occ) / 1000.0 / 3600.0
+    return float(mass_flow_kg_s * L_V)
+
+
+def _occupancy_fraction_series(building_object, index) -> np.ndarray:
+    """
+    Hourly occupancy fraction in [0, 1] over *index*, from the 'occupants' gain profile.
+
+    Falls back to a flat 1.0 when no occupants profile is declared, so the moisture
+    gain degrades to a constant rather than silently vanishing.
+    """
+    n = len(index)
+    gains = (
+        building_object.get("building_parameters", {}) or {}
+    ).get("internal_gains", []) or []
+    profile = None
+    for entry in gains:
+        if str(entry.get("name", "")).strip().lower() == "occupants":
+            profile = entry
+            break
+    if profile is None:
+        return np.ones(n, dtype=float)
+
+    weekday = profile.get("weekday")
+    weekend = profile.get("weekend")
+    if not weekday or not weekend or len(weekday) < 24 or len(weekend) < 24:
+        return np.ones(n, dtype=float)
+
+    wd = np.asarray(weekday[:24], dtype=float)
+    we = np.asarray(weekend[:24], dtype=float)
+
+    try:
+        idx = pd.DatetimeIndex(index)
+        hours = idx.hour.to_numpy()
+        is_weekend = (idx.dayofweek.to_numpy() >= 5)
+    except (TypeError, ValueError):
+        return np.ones(n, dtype=float)
+
+    out = np.where(is_weekend, we[hours], wd[hours]).astype(float)
+    return np.clip(np.nan_to_num(out, nan=0.0), 0.0, 1.0)
 
 
 @dataclass
@@ -8249,6 +8394,31 @@ class ISO52016:
 
         RH_act = RH_arr[act_slice] if len(RH_arr) >= Tstepn else np.full(len(hourly_results), np.nan)
         int_gains_act = int_gains_arr[act_slice]
+
+        # --- AIB latent-heat fix -------------------------------------------------------
+        # EN 16798-1 comfort band for this building type, replacing the flat 50 % RH
+        # reference. Explicit kwargs win so a caller can still pin the band.
+        _lat_dt_h = _infer_timestep_hours_from_index(hourly_results.index, default=1.0)
+        _iso_entry = (
+            getattr(iso16798_profiles, "internal_gains_occupants", {}) or {}
+        ).get(str((building_object.get("building", {}) or {}).get("building_type_class", "")).strip())
+        _band_lo = kwargs.get("latent_indoor_rh_min_pct")
+        _band_hi = kwargs.get("latent_indoor_rh_max_pct")
+        if _band_lo is None and isinstance(_iso_entry, dict):
+            _band_lo = _iso_entry.get("min_relative_humidity")
+        if _band_hi is None and isinstance(_iso_entry, dict):
+            _band_hi = _iso_entry.get("max_relative_humidity")
+        _evaporative = str(
+            kwargs.get(
+                "cooling_system_type",
+                (building_object.get("building_parameters", {}) or {}).get("cooling_system_type", ""),
+            ) or ""
+        ).strip().lower() == "evaporative"
+        # Occupant moisture production, scaled by the occupancy schedule.
+        _occ_frac = _occupancy_fraction_series(building_object, hourly_results.index)
+        _lat_int_base_w = _occupancy_latent_gain_w(building_object, 1.0)
+        # -------------------------------------------------------------------------------
+
         latent_rows = []
         for _idx, (_hve, _tint, _text, _rh, _int_g) in enumerate(
             zip(hourly_results["H_ve"].to_numpy(dtype=float),
@@ -8263,10 +8433,23 @@ class ISO52016:
                 float(_text),
                 float(_rh) if np.isfinite(_rh) else np.nan,
                 rh_int_pct=float(kwargs.get("latent_indoor_rh_pct", 50.0)),
+                rh_int_min_pct=_band_lo,
+                rh_int_max_pct=_band_hi,
+                dt_h=_lat_dt_h,
+                evaporative_cooling=_evaporative,
             )
-            phi_lat_int_w   = f_lat_int * float(_int_g)           # latent internal gains [W] (ISO 52016 §6.5.6)
+            # Latent internal gains [W]. ISO 52016 §6.5.6 leaves the latent fraction at
+            # 0.0 by default, so occupants produced no moisture at all; use the EN
+            # 16798-1 tabulated moisture production, occupancy-weighted, whenever no
+            # explicit latent_internal_fraction was supplied.
+            if f_lat_int > 0.0:
+                phi_lat_int_w = f_lat_int * float(_int_g)
+            else:
+                phi_lat_int_w = _lat_int_base_w * float(
+                    _occ_frac[_idx] if _idx < len(_occ_frac) else 1.0
+                )
             phi_lat_total_w = phi_lat_vent_w + phi_lat_int_w      # net latent: >0 dehumidify, <0 humidify
-            q_lat_total_wh  = q_lat_vent_wh  + phi_lat_int_w      # 1 h timestep
+            q_lat_total_wh  = q_lat_vent_wh  + phi_lat_int_w * _lat_dt_h
             latent_rows.append((
                 x_ext, x_int, m_dot_kg_s,
                 phi_lat_vent_w, q_lat_vent_wh,
