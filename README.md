@@ -81,14 +81,14 @@ dictionary, and the first three below dominate the comparison.
 
 **Cross-check.** The ISO figures in this comparison are bit-identical to the
 `Baseline` column of `compare_branches_apt305.py`, confirming both harnesses
-drive the same unmodified engine with the same inputs. On the bundled Charlton
-TMYx that is 85.472 kWh heating and 2539.262 kWh cooling in both, and
-`examples/check_baseline_consistency.py` asserts it:
+drive the same unmodified engine with the same inputs. On the bundled Melbourne
+Regional Office TMYx that is 15.862 kWh heating and 2027.506 kWh cooling in both,
+and `examples/check_baseline_consistency.py` asserts it:
 
 ```bash
 python examples/check_baseline_consistency.py
-# Heating   85.472000   85.472000   0.00e+00
-# Cooling 2,539.262100 2,539.262000  3.94e-08
+# Heating   15.861617   15.861617   0.00e+00
+# Cooling 2,027.506478 2,027.506478  0.00e+00
 # PASS  both harnesses report the same baseline engine result.
 ```
 
@@ -180,12 +180,18 @@ EPW site mismatch:
   offset  : 143.0 deg (limit 2.5)
 ```
 
-The EPW bundled in `weather_cache/` is `AUS_VIC_Charlton.948390_TMYx.2009-2023`,
-which sits **2.0°** from central Melbourne — inland, so hotter summers and colder
-winters than the coast. It lands in the announced band, and every chart it
-produces is labelled *Charlton*, not Melbourne. Drop a coastal Melbourne TMYx
-(`AUS_VIC_Melbourne.Regional.Office.948680_TMYx…`) into `weather_cache/` to run
-the true site.
+The EPW bundled in `weather_cache/` is
+`AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025` — Melbourne Regional Office, at
+lat −37.8075, lon 144.970. That is **0.008°** from the building's own
+coordinates, so it lands well inside the silent band and every chart is simply
+labelled *Melbourne.RO*.
+
+> Earlier revisions of this repo bundled `AUS_VIC_Charlton.948390_TMYx.2009-2023`
+> instead, which sits 2.0° inland and therefore ran in the announced band. Inland
+> Charlton has both colder winters and hotter summers than the coast, so it
+> overstated demand at both ends: baseline heating was 85.472 kWh against
+> 15.862 kWh on the true site, and cooling 2539.262 against 2027.506. Any figure
+> quoted from a run before that swap is on Charlton, not Melbourne.
 
 `--allow-site-mismatch` overrides it deliberately; results are then labelled with
 the EPW's own location.
