@@ -42,8 +42,15 @@ MELBOURNE_LAT = -37.800
 MELBOURNE_LON = 144.968
 
 # How far an EPW may sit from the building before it is the wrong climate.
-# ~1.5 deg is roughly greater-Melbourne; beyond that the site is different.
-MAX_SITE_OFFSET_DEG = 1.5
+#
+# Two bands, because "wrong city" and "wrong continent" deserve different
+# answers. Inside WARN it is greater-Melbourne and silent. Between WARN and MAX
+# it is a regional Victorian station — a different climate (inland stations run
+# hotter in summer and colder in winter than the coast), so it is accepted but
+# announced, and the station name is carried into every chart label. Beyond MAX
+# it is another region entirely and is refused.
+WARN_SITE_OFFSET_DEG = 1.5
+MAX_SITE_OFFSET_DEG = 2.5
 
 # climate.onebuilding.org directory holding every Victorian TMY. Scraping the
 # index is deliberate: TMYx filenames carry a year range that changes with each
@@ -146,6 +153,10 @@ def validate_epw_site(epw_path: Path, strict: bool = True) -> tuple[float, float
         if strict:
             raise WeatherUnavailable(msg)
         print(f"  WARNING {msg}")
+    elif offset > WARN_SITE_OFFSET_DEG:
+        print(f"  NOTE  {city} is {offset:.1f} deg from central Melbourne — a regional "
+              f"Victorian station,\n        not a coastal Melbourne one. Accepted, and "
+              f"labelled '{city}' on every output.")
     return lat, lon, city
 
 
@@ -298,6 +309,51 @@ def resolve(weather: str | None, weather_source: str,
     except WeatherUnavailable as exc:
         print("  EPW mirrors unreachable; trying PVGIS…")
         return _pvgis_or_raise(f"EPW download failed:\n{exc}")
+
+
+def resolve_and_record(weather: str | None, weather_source: str,
+                       allow_site_mismatch: bool, outdir: Path,
+                       require_epw: bool = False) -> tuple[str, str | None, str]:
+    """
+    Resolve the weather AND record what was chosen next to the results.
+
+    THIS IS THE FIX FOR THE HARNESS-DISAGREEMENT BUG. ``resolve()`` falls back
+    (cached EPW -> download -> PVGIS), so two scripts run minutes apart could
+    legitimately return different sources — one on a Melbourne EPW, one on a
+    PVGIS TMY — and nothing downstream said so. The two baselines then differed
+    by a factor of three on heating while both charts claimed to be "the
+    baseline engine on the same building", which they were: same engine, same
+    building, *different weather*.
+
+    Every run now drops ``run_meta.json`` beside its outputs, so two result
+    directories can be compared and any weather mismatch is immediately visible
+    instead of being argued about from the charts.
+
+    ``require_epw`` refuses a PVGIS fallback outright, for callers (EnergyPlus,
+    or any run that must be comparable with an EnergyPlus run) that cannot use
+    it or must not silently diverge from one.
+    """
+    import json
+
+    source, path, label = resolve(weather, weather_source, allow_site_mismatch)
+    if require_epw and source != "epw":
+        raise WeatherUnavailable(
+            "This run requires an EPW file and PVGIS was selected instead.\n"
+            "EnergyPlus cannot read PVGIS, and an ISO run on PVGIS is not\n"
+            "comparable with an EnergyPlus run on an EPW — that mismatch is\n"
+            "exactly what made the two baseline charts disagree.\n\n"
+            "Pass --weather path/to/Melbourne.epw, or place one in "
+            f"{CACHE_DIR}/."
+        )
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    meta = {"weather_source": source, "weather_path": path, "weather_label": label}
+    if path:
+        lat, lon, city = read_epw_site(Path(path))
+        meta.update(station=city, latitude=lat, longitude=lon,
+                    site_offset_deg=round(site_offset_deg(lat, lon), 3))
+    (outdir / "run_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return source, path, label
 
 
 if __name__ == "__main__":

@@ -626,20 +626,33 @@ b, _ = sanitize_and_validate_BUI(bui, fix=True)
 res = ISO52016.Temperature_and_Energy_needs_calculation(
     b, weather_source="epw", path_weather_file=sys.argv[3])
 
-# Handle both 2-tuple (PyPI) and 3-tuple (fork with Sankey) returns
-sankey_data = {}
-if len(res) == 3:
-    hourly, annual, sankey_data = res
-else:
-    hourly, annual = res
+# The vendored BASELINE engine returns a 2-tuple. Only the modified branches
+# return a third Sankey element, so the Sankey here is built from the annual
+# balance columns instead — those exist on every version.
+hourly, annual = res[0], res[1]
 
 def g(k):
     return float(pd.to_numeric(annual[k], errors="coerce").iloc[0]) if k in annual.columns else float("nan")
+
+# Annual energy-balance terms, for the Sankey. _add_annual_balance_columns()
+# emits every one of these as a signed loss/gain pair already integrated to kWh.
+BALANCE_KEYS = [
+    "Q_solar_gains_kWh", "Q_internal_gains_kWh",
+    "Q_tr_window_loss_kWh", "Q_tr_window_gain_kWh",
+    "Q_tr_opaque_loss_kWh", "Q_tr_opaque_gain_kWh",
+    "Q_tr_total_loss_kWh", "Q_tr_total_gain_kWh",
+    "Q_ve_loss_kWh", "Q_ve_gain_kWh",
+    "Q_tb_loss_kWh", "Q_tb_gain_kWh",
+    "Q_ground_loss_kWh", "Q_ground_gain_kWh",
+    "Q_storage_charge_kWh", "Q_storage_discharge_kWh", "Q_storage_net_kWh",
+]
+balance = {k: g(k) for k in BALANCE_KEYS if k in annual.columns}
+
 json.dump({"heating_kWh": g("Q_H_annual_kWh"),
            "cooling_kWh": g("Q_C_annual_kWh"),
            "latent_kWh":  g("Q_latent_annual_kWh"),
            "int_gains_kWh": g("Q_internal_gains_kWh"),
-           "b_ztu": b_ztu, "gains_w": gains_w, "sankey": sankey_data},
+           "b_ztu": b_ztu, "gains_w": gains_w, "balance": balance},
           open(sys.argv[4], "w"))
 '''
 
@@ -697,85 +710,249 @@ class BaselineEngine:
 # Sankey Diagram
 # ---------------------------------------------------------------------------
 
-def _sankey_chart(sankey_data: dict, outdir: Path) -> None:
-    """
-    Generate a Sankey diagram showing energy flows for pybuilding energy.
+# One distinct colour per band on each side. Sized to the longest possible
+# stack (8 inflow paths, 7 outflow paths) so the palette never wraps — a wrap
+# would give two different flows the same colour in the same diagram.
+SANKEY_IN_COLORS = ["#e0a400", "#d1495b", "#2a78d6", "#8a63d2",
+                    "#c0562f", "#00868b", "#b8860b", "#6f7d3c"]
+SANKEY_OUT_COLORS = ["#1baf7a", "#2a9d8f", "#4c8dae", "#7a6f9b",
+                     "#a05c3a", "#9c4f7c", "#5f8b3a"]
 
-    Sankey data structure: {"sources": [...], "targets": [...], "values": [...]}
+
+def sankey_flows(iso: dict) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
     """
-    if not sankey_data:
-        print("note: Sankey data not available (engine may not support it)")
+    Turn the ISO annual balance into (inflows, outflows) for the Sankey.
+
+    Everything comes from the annual balance columns the engine always emits —
+    ``_add_annual_balance_columns`` splits each signed hourly term into a
+    loss/gain pair in kWh — so this works on the unmodified baseline engine,
+    which returns a plain 2-tuple and no Sankey structure of its own.
+
+    Sign convention: the engine reports a *loss* as heat leaving the zone and a
+    *gain* as heat entering it, both positive. Heating supplied is an inflow;
+    cooling extracted is an outflow.
+    """
+    b = iso.get("balance") or {}
+
+    def v(key: str) -> float:
+        x = b.get(key, 0.0)
+        return 0.0 if x != x else abs(float(x))   # NaN-safe, magnitudes only
+
+    # Per-path terms, not the Q_tr_total aggregate. The two are not the same
+    # number: window + opaque = 1028 kWh here against a Q_tr_total_loss of 1009,
+    # because the total is signed per hour and the paths cancel against each
+    # other before being split. The individual paths are what a Sankey is for.
+    inflows = [
+        ("Solar gains", v("Q_solar_gains_kWh")),
+        ("Internal gains", v("Q_internal_gains_kWh")),
+        ("Window transm. gain", v("Q_tr_window_gain_kWh")),
+        ("Opaque transm. gain", v("Q_tr_opaque_gain_kWh")),
+        ("Ground gain", v("Q_ground_gain_kWh")),
+        ("Thermal bridge gain", v("Q_tb_gain_kWh")),
+        ("Ventilation gain", v("Q_ve_gain_kWh")),
+        ("Storage discharge", v("Q_storage_discharge_kWh")),
+        ("Heating supplied", abs(float(iso.get("heating_kWh") or 0.0))),
+    ]
+    outflows = [
+        ("Window transm. loss", v("Q_tr_window_loss_kWh")),
+        ("Opaque transm. loss", v("Q_tr_opaque_loss_kWh")),
+        ("Ground loss", v("Q_ground_loss_kWh")),
+        ("Thermal bridge loss", v("Q_tb_loss_kWh")),
+        ("Ventilation loss", v("Q_ve_loss_kWh")),
+        ("Storage charge", v("Q_storage_charge_kWh")),
+        ("Cooling extracted", abs(float(iso.get("cooling_kWh") or 0.0))),
+    ]
+    # Fall back to the aggregate only if the per-path columns are absent.
+    if v("Q_tr_window_loss_kWh") + v("Q_tr_opaque_loss_kWh") == 0.0:
+        inflows.insert(2, ("Transmission gain", v("Q_tr_total_gain_kWh")))
+        outflows.insert(0, ("Transmission loss", v("Q_tr_total_loss_kWh")))
+
+    # Drop anything below 0.2 % of the larger side: a hairline band with a
+    # two-line label attached is noise, not information.
+    scale = max(sum(x for _, x in inflows), sum(x for _, x in outflows), 1e-9)
+    keep = 0.002 * scale
+    inflows = [(n, x) for n, x in inflows if x > keep]
+    outflows = [(n, x) for n, x in outflows if x > keep]
+    return inflows, outflows
+
+
+def _sankey_chart(iso: dict, outdir: Path, subtitle: str) -> None:
+    """
+    Draw the ISO 52016-1 annual energy balance as a Sankey.
+
+    Rendered with matplotlib to a PNG on purpose. A plotly HTML file cannot be
+    shown in Colab with ``IFrame(src=...)`` — the notebook has no web server on
+    that path, which is what produced "localhost refused to connect". A PNG
+    displays with ``Image(...)`` anywhere. A plotly HTML is written too when
+    plotly is installed, for the interactive version.
+    """
+    inflows, outflows = sankey_flows(iso)
+    if not inflows or not outflows:
+        print("note: Sankey skipped — the engine reported no annual balance columns")
         return
 
-    sources = sankey_data.get("sources", [])
-    targets = sankey_data.get("targets", [])
-    values = sankey_data.get("values", [])
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.path import Path as MPath
+    from matplotlib.patches import PathPatch, Rectangle
 
-    if not sources or not targets or not values:
-        print(f"note: Sankey data incomplete — sources:{len(sources)}, "
-              f"targets:{len(targets)}, values:{len(values)}")
-        return
+    total_in, total_out = sum(v for _, v in inflows), sum(v for _, v in outflows)
 
+    # The balance does not close exactly. ISO 52016-1 is a node network, not a
+    # single lumped air node: gains are split between the air node and the
+    # surface nodes, which then exchange with each other, so the air-node paths
+    # summed here do not have to add up. Show the gap rather than hide it.
+    resid = total_in - total_out
+    resid_side = None
+    if abs(resid) > 0.005 * max(total_in, total_out):
+        resid_side = "out" if resid > 0 else "in"
+        if resid > 0:
+            outflows.append(("Residual (node network)", resid))
+        else:
+            inflows.append(("Residual (node network)", -resid))
+        total_in, total_out = sum(v for _, v in inflows), sum(v for _, v in outflows)
+
+    total = max(total_in, total_out)
+    fig, ax = plt.subplots(figsize=(12.6, 6.6), dpi=150)
+    fig.patch.set_facecolor(SURFACE)
+    ax.set_facecolor(SURFACE)
+
+    GAP = 0.012 * total          # vertical air between stacked bands
+    X_SRC, X_L, X_R, X_SNK = 0.06, 0.30, 0.70, 0.94
+    span_in = total_in + GAP * (len(inflows) - 1)
+    span_out = total_out + GAP * (len(outflows) - 1)
+    top = max(span_in, span_out)
+
+    def ribbon(y0l, y1l, y0r, y1r, color):
+        c = (X_L + X_R) / 2.0
+        verts = [(X_L, y0l),
+                 (c, y0l), (c, y0r), (X_R, y0r),
+                 (X_R, y1r),
+                 (c, y1r), (c, y1l), (X_L, y1l),
+                 (X_L, y0l)]
+        codes = [MPath.MOVETO,
+                 MPath.CURVE4, MPath.CURVE4, MPath.CURVE4,
+                 MPath.LINETO,
+                 MPath.CURVE4, MPath.CURVE4, MPath.CURVE4,
+                 MPath.CLOSEPOLY]
+        ax.add_patch(PathPatch(MPath(verts, codes), facecolor=color,
+                               edgecolor="none", alpha=0.62, zorder=2))
+
+    # Both sides are drawn top-down against the same centre bar, so each side's
+    # stack is proportional within itself and the two meet at equal total height.
+    y_in = top - (top - span_in) / 2.0
+    y_out = top - (top - span_out) / 2.0
+    RESID_COLOR = "#8f8d88"   # neutral: it is a closure term, not a physical flow
+
+    cursor_in, cursor_out = y_in, y_out
+    left_slots, right_slots = [], []
+    for i, (name, val) in enumerate(inflows):
+        c = RESID_COLOR if (resid_side == "in" and i == len(inflows) - 1) \
+            else SANKEY_IN_COLORS[i % len(SANKEY_IN_COLORS)]
+        left_slots.append((name, val, cursor_in - val, cursor_in, c))
+        cursor_in -= val + GAP
+    for i, (name, val) in enumerate(outflows):
+        c = RESID_COLOR if (resid_side == "out" and i == len(outflows) - 1) \
+            else SANKEY_OUT_COLORS[i % len(SANKEY_OUT_COLORS)]
+        right_slots.append((name, val, cursor_out - val, cursor_out, c))
+        cursor_out -= val + GAP
+
+    # Each inflow is distributed across the outflows in proportion, which is the
+    # honest reading of an annual balance: the ISO method never attributes a
+    # particular joule of solar gain to a particular loss path.
+    zone_in, zone_out = y_in, y_out
+    for name, val, ylo, yhi, color in left_slots:
+        share_lo = zone_in - val
+        ribbon(ylo, yhi, share_lo, zone_in, color)
+        zone_in -= val
+    for name, val, ylo, yhi, color in right_slots:
+        share_lo = zone_out - val
+        ribbon(share_lo, zone_out, ylo, yhi, color)
+        zone_out -= val
+
+    # A 1 % flow gets a 1 % band, which is thinner than its own two-line label.
+    # Bands stay strictly proportional — distorting them would defeat the point
+    # of a Sankey — and the LABELS are declutter-shifted instead, with a leader
+    # line drawn whenever a label had to leave its band's centre.
+    MIN_SEP = 0.078 * top
+
+    def declutter(centres):
+        y = list(centres)
+        for i in range(1, len(y)):                      # top-down
+            y[i] = min(y[i], y[i - 1] - MIN_SEP)
+        for i in range(len(y) - 2, -1, -1):             # bottom-up repair
+            y[i] = max(y[i], y[i + 1] + MIN_SEP)
+        return y
+
+    def stack(slots, x, align):
+        centres = [(ylo + yhi) / 2.0 for _n, _v, ylo, yhi, _c in slots]
+        placed = declutter(centres)
+        for (name, val, ylo, yhi, color), cy, ly in zip(slots, centres, placed):
+            ax.add_patch(Rectangle((x, ylo), 0.016, val, facecolor=color,
+                                   edgecolor="none", zorder=4))
+            tx = x - 0.014 if align == "right" else x + 0.030
+            if abs(ly - cy) > 1e-9:
+                lx = x - 0.006 if align == "right" else x + 0.022
+                ax.plot([lx, tx + (0.006 if align == "right" else -0.006)], [cy, ly],
+                        color=GRID, linewidth=0.9, zorder=3, solid_capstyle="round")
+            ax.text(tx, ly, f"{name}\n{val:,.0f} kWh  ({val / total * 100.0:.0f}%)",
+                    ha=align, va="center", fontsize=8.8, color=TEXT_PRIMARY,
+                    linespacing=1.45, zorder=5)
+
+    stack(left_slots, X_SRC + 0.20, "right")
+    stack(right_slots, X_R, "left")
+
+    ax.set_xlim(0.0, 1.06)
+    ax.set_ylim(-0.20 * top, top * 1.06)
+    ax.axis("off")
+    fig.text(0.012, 0.975, "Apt 305 — pyBuildingEnergy (ISO 52016-1) annual energy balance",
+             fontsize=13.5, color=TEXT_PRIMARY, ha="left", va="top",
+             fontweight="semibold")
+    fig.text(0.012, 0.918,
+             f"in {total_in:,.0f} kWh   ·   out {total_out:,.0f} kWh   ·   {subtitle}",
+             fontsize=8.4, color=TEXT_SECONDARY, ha="left", va="top")
+    fig.subplots_adjust(top=0.86, bottom=0.03, left=0.02, right=0.98)
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    out_png = outdir / "sankey_pybuildingenergy.png"
+    fig.savefig(out_png, facecolor=SURFACE, bbox_inches="tight")
+    plt.close(fig)
+    print(f"sankey -> {out_png}")
+
+    _sankey_plotly(inflows, outflows, outdir)
+
+
+def _sankey_plotly(inflows, outflows, outdir: Path) -> None:
+    """Interactive companion to the PNG. Silently skipped without plotly."""
     try:
         import plotly.graph_objects as go
     except ImportError:
-        print("note: Sankey diagram skipped (plotly not installed; "
-              "run: pip install plotly)")
         return
 
-    try:
-        # Create color palette for nodes
-        unique_nodes = list(dict.fromkeys(sources + targets))
-        node_colors = {
-            node: ["#2a78d6", "#eb6834", "#6ba547", "#d97706", "#8b5cf6", "#ec4899"][i % 6]
-            for i, node in enumerate(unique_nodes)
-        }
-        node_color_list = [node_colors.get(node, "#999999") for node in unique_nodes]
+    labels = [n for n, _ in inflows] + ["Zone"] + [n for n, _ in outflows]
+    zone = len(inflows)
+    src = list(range(len(inflows))) + [zone] * len(outflows)
+    dst = [zone] * len(inflows) + list(range(zone + 1, len(labels)))
+    val = [v for _, v in inflows] + [v for _, v in outflows]
+    colors = ([SANKEY_IN_COLORS[i % len(SANKEY_IN_COLORS)] for i in range(len(inflows))]
+              + ["#52514e"]
+              + [SANKEY_OUT_COLORS[i % len(SANKEY_OUT_COLORS)] for i in range(len(outflows))])
 
-        # Map node names to indices
-        source_indices = [unique_nodes.index(s) for s in sources]
-        target_indices = [unique_nodes.index(t) for t in targets]
-
-        fig = go.Figure(data=[go.Sankey(
-            node=dict(
-                pad=15,
-                thickness=20,
-                line=dict(color="black", width=0.5),
-                label=unique_nodes,
-                color=node_color_list,
-            ),
-            link=dict(
-                source=source_indices,
-                target=target_indices,
-                value=values,
-                color=[node_colors.get(sources[i], "#cccccc") for i in range(len(sources))],
-            )
-        )])
-
-        fig.update_layout(
-            title="Apt 305 — pyBuildingEnergy Energy Flows (Sankey)",
-            font=dict(size=10, color="#0b0b0b"),
-            plot_bgcolor="#fcfcfb",
-            paper_bgcolor="#fcfcfb",
-            height=500,
-            margin=dict(l=20, r=20, t=50, b=20),
-        )
-
-        outdir.mkdir(parents=True, exist_ok=True)
-        out_html = outdir / "sankey_pybuildingenergy.html"
-        fig.write_html(str(out_html))
-        print(f"sankey   -> {out_html}")
-
-        # Also try to save as PNG
-        out_png = outdir / "sankey_pybuildingenergy.png"
-        try:
-            fig.write_image(str(out_png), width=1000, height=600)
-            print(f"sankey   -> {out_png}")
-        except Exception as e:
-            pass  # kaleido not available, PNG skipped
-
-    except Exception as e:
-        print(f"note: Sankey diagram generation failed: {type(e).__name__}: {str(e)[:100]}")
+    fig = go.Figure(go.Sankey(
+        node=dict(pad=18, thickness=18, label=labels, color=colors,
+                  line=dict(color=GRID, width=0.5)),
+        link=dict(source=src, target=dst, value=val,
+                  color=[colors[s] for s in src]),
+    ))
+    fig.update_layout(
+        title="Apt 305 — pyBuildingEnergy (ISO 52016-1) annual energy balance",
+        font=dict(size=11, color=TEXT_PRIMARY),
+        paper_bgcolor=SURFACE, height=560, margin=dict(l=20, r=20, t=60, b=20),
+    )
+    out_html = outdir / "sankey_pybuildingenergy.html"
+    fig.write_html(str(out_html), include_plotlyjs="cdn")
+    print(f"sankey -> {out_html}")
 
 
 # ---------------------------------------------------------------------------
@@ -786,7 +963,7 @@ SERIES_COLORS = ["#2a78d6", "#eb6834"]   # validated categorical slots 1-2
 SURFACE, TEXT_PRIMARY, TEXT_SECONDARY, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e1"
 
 
-def report(iso: dict, ep: dict, area: float, outdir: Path, subtitle: str, sankey_data: dict | None = None):
+def report(iso: dict, ep: dict, area: float, outdir: Path, subtitle: str):
     rows = []
     for label, key in (("Heating", "heating_kWh"), ("Cooling", "cooling_kWh")):
         rows.append((label, iso[key], ep[key]))
@@ -823,9 +1000,12 @@ def report(iso: dict, ep: dict, area: float, outdir: Path, subtitle: str, sankey
                   f"{'n/a' if pct != pct else f'{pct:+.1f}%'} |")
     (outdir / "baseline_vs_energyplus.md").write_text("\n".join(md) + "\n", encoding="utf-8")
 
+    # The raw ISO result, including every annual balance term. Lets a notebook
+    # rebuild the Sankey interactively without re-running the engine.
+    (outdir / "iso_results.json").write_text(json.dumps(iso, indent=2), encoding="utf-8")
+
     _chart(rows, outdir, subtitle)
-    if sankey_data:
-        _sankey_chart(sankey_data, outdir)
+    _sankey_chart(iso, outdir, subtitle)
     return rows
 
 
@@ -912,17 +1092,18 @@ def main() -> None:
         print(f"IDF written -> {args.outdir / 'apt305.idf'}  ({idf.count(chr(10))+1} lines)")
         return
 
-    from weather_melbourne import resolve, WeatherUnavailable
+    from weather_melbourne import resolve_and_record, WeatherUnavailable
     print("resolving weather…")
     try:
-        wsource, wpath, wlabel = resolve(args.weather, args.weather_source,
-                                         args.allow_site_mismatch)
+        # require_epw: EnergyPlus cannot read PVGIS, and an ISO run on PVGIS
+        # would not be comparable with the E+ run either. run_meta.json records
+        # the choice so this run can be checked against compare_branches_apt305.
+        wsource, wpath, wlabel = resolve_and_record(
+            args.weather, args.weather_source, args.allow_site_mismatch,
+            args.outdir, require_epw=True,
+        )
     except WeatherUnavailable as exc:
         print(f"\nERROR  {exc}\n")
-        sys.exit(2)
-    if wsource != "epw":
-        print("\nERROR  EnergyPlus needs an EPW file; PVGIS cannot be used here.\n"
-              "       Supply one with --weather, or cache it in weather_cache/.\n")
         sys.exit(2)
     print(f"  -> {wlabel}\n")
 
@@ -972,8 +1153,7 @@ def main() -> None:
                 else f"E+ neighbours pinned at {args.adj_temp} °C")
     subtitle = (f"{wlabel}  ·  identical geometry, fabric, schedules, setpoints, "
                 f"ventilation  ·  {adj_desc}")
-    sankey_data = iso.get("sankey", {})
-    report(iso, ep, area, args.outdir, subtitle, sankey_data)
+    report(iso, ep, area, args.outdir, subtitle)
 
     if iso.get("latent_kWh") == iso.get("latent_kWh") and iso.get("latent_kWh"):
         print(f"note: the ISO engine also reports {iso['latent_kWh']:,.1f} kWh of latent load "

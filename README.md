@@ -80,9 +80,49 @@ dictionary, and the first three below dominate the comparison.
 | **Declared window shading does nothing** | The 0.25 m overhang on both windows produces a shading factor of exactly **1.0000 for all 8760 hours**. The `W_*` columns are emitted, but no shading is ever applied — so `shading: True` in the building dictionary is silently inert here. |
 
 **Cross-check.** The ISO figures in this comparison are bit-identical to the
-`Baseline` column of `compare_branches_apt305.py` — 21.018148 kWh heating and
-3394.859182 kWh cooling — confirming both harnesses drive the same unmodified
-engine with the same inputs.
+`Baseline` column of `compare_branches_apt305.py`, confirming both harnesses
+drive the same unmodified engine with the same inputs. On the bundled Charlton
+TMYx that is 85.472 kWh heating and 2539.262 kWh cooling in both, and
+`examples/check_baseline_consistency.py` asserts it:
+
+```bash
+python examples/check_baseline_consistency.py
+# Heating   85.472000   85.472000   0.00e+00
+# Cooling 2,539.262100 2,539.262000  3.94e-08
+# PASS  both harnesses report the same baseline engine result.
+```
+
+> **The two harnesses did once disagree** — 150 kWh heating on one chart against
+> 40 kWh on the other. Neither the engine nor the building was at fault: one run
+> had fallen back to a PVGIS TMY while the other used an EPW, because
+> `resolve()` degrades silently through cached EPW → download → PVGIS. Same
+> engine, same building, *different weather*.
+>
+> Both scripts now write `run_meta.json` next to their outputs recording the
+> file actually used, `check_baseline_consistency.py` compares that **before**
+> comparing numbers, and `--require-epw` refuses the PVGIS fallback outright for
+> any run that has to line up with an EnergyPlus run.
+
+### Sankey — where the ISO energy actually goes
+
+`baseline_vs_energyplus.py` also writes an annual energy-balance Sankey for the
+ISO side, built from the engine's own `Q_*_loss_kWh` / `Q_*_gain_kWh` columns:
+
+| Output | Notes |
+| --- | --- |
+| `sankey_pybuildingenergy.png` | matplotlib; displays anywhere, including Colab |
+| `sankey_pybuildingenergy.html` | plotly, interactive; written only if plotly is installed |
+| `iso_results.json` | the raw ISO result, so a notebook can rebuild the Sankey without re-running the engine |
+
+The PNG is the one to use in a notebook. A plotly HTML file cannot be shown with
+`IFrame(src=...)` — Colab runs no web server on that path, which is what produces
+*localhost refused to connect*; render the figure object with `fig.show()` instead.
+
+The balance does not close exactly, and the gap is shown rather than hidden.
+ISO 52016-1 is a node network, not one lumped air node: gains are split between
+the air node and the surface nodes, which then exchange with each other, so the
+air-node paths summed here need not add up. On the bundled EPW that residual is
+about 10 %.
 
 The script corrects the first three — probing the engine for its real gain
 magnitudes and b_ztu values, then building the IDF from them — plus the frame
@@ -103,9 +143,12 @@ python examples/compare_branches_apt305.py --weather-source pvgis # TMY at the b
 | File | Contents |
 | --- | --- |
 | `examples/apt305_building.py` | Building definition only — no engine import, so one dictionary feeds every engine version |
-| `examples/weather_melbourne.py` | Weather resolution + the site-validation guard |
+| `examples/weather_melbourne.py` | Weather resolution, the site-validation guard, and `run_meta.json` recording |
 | `examples/compare_branches_apt305.py` | Checks out each branch into a throwaway worktree, runs it in its own subprocess, emits table + chart |
+| `examples/baseline_vs_energyplus.py` | Baseline ISO vs EnergyPlus: alignment audit, table, bar chart, Sankey |
+| `examples/check_baseline_consistency.py` | Asserts both harnesses report the same baseline result, weather first |
 | `notebooks/AIB_apt305_colab.ipynb` | Colab notebook |
+| `weather_cache/` | Bundled EPW, so every run uses the same weather with nothing to download |
 | `results/apt305/` | Outputs, written on each run |
 
 Each branch runs in a **separate process** because three versions of the same
@@ -123,16 +166,26 @@ source, and getting it wrong is silent:
 | `weather_source="pvgis"` | the **building dictionary** — site-correct by construction |
 
 So handing the Melbourne apartment an Athens EPW simulates it in Athens, with no
-warning. `examples/weather_melbourne.py` now rejects any EPW more than 1.5° from
-the building's coordinates:
+warning. `examples/weather_melbourne.py` grades the distance in two bands:
+within **1.5°** is greater-Melbourne and silent; **1.5–2.5°** is a regional
+Victorian station — a genuinely different climate, so it is accepted but
+announced and the station name is carried onto every chart; beyond **2.5°** it is
+another region and is refused:
 
 ```
 EPW site mismatch:
   file    : 2020_Athens.epw
   station : Athinai at lat 37.967, lon 23.717
   building: Melbourne at lat -37.800, lon 144.968
-  offset  : 143.0 deg (limit 1.5)
+  offset  : 143.0 deg (limit 2.5)
 ```
+
+The EPW bundled in `weather_cache/` is `AUS_VIC_Charlton.948390_TMYx.2009-2023`,
+which sits **2.0°** from central Melbourne — inland, so hotter summers and colder
+winters than the coast. It lands in the announced band, and every chart it
+produces is labelled *Charlton*, not Melbourne. Drop a coastal Melbourne TMYx
+(`AUS_VIC_Melbourne.Regional.Office.948680_TMYx…`) into `weather_cache/` to run
+the true site.
 
 `--allow-site-mismatch` overrides it deliberately; results are then labelled with
 the EPW's own location.
@@ -142,11 +195,10 @@ Resolution order is: explicit `--weather` (validated) → cached EPW under
 lat/lon. If none is reachable the run **fails with instructions** rather than
 substituting another city.
 
-> **No results are committed.** This sandbox blocks PVGIS, `climate.onebuilding.org`
-> and every EPW mirror (only `raw.githubusercontent.com` is reachable), so no
-> Melbourne TMY could be obtained here and no Melbourne figures have been produced.
-> The pipeline itself is verified end to end; run the Colab notebook, which has open
-> network, to generate real Melbourne numbers.
+That fallback chain is convenient and was also the source of the harness
+disagreement above, so every run records its choice in `run_meta.json`, and
+`--require-epw` turns the PVGIS step off for runs that must stay comparable with
+EnergyPlus.
 
 ## Reference case
 

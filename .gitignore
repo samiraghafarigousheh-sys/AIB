@@ -4,4 +4,9 @@ __pycache__/
 .pytest_cache/
 *.json.tmp
 results/
-weather_cache/
+
+# Downloaded TMYs stay out of the repo, but the reference EPW is committed:
+# every harness must run on the SAME weather, and a file that has to be fetched
+# first is a file two runs can disagree about.
+weather_cache/*
+!weather_cache/AUS_VIC_Charlton.948390_TMYx.2009-2023.epw
