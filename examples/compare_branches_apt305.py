@@ -375,6 +375,10 @@ def main() -> None:
     ap.add_argument("--allow-site-mismatch", action="store_true",
                     help="Accept an EPW from another location. Results are then for "
                          "that location, not Melbourne, and are labelled as such.")
+    ap.add_argument("--require-epw", action="store_true",
+                    help="Fail rather than fall back to PVGIS. Use this whenever the "
+                         "results must be comparable with an EnergyPlus run, which can "
+                         "only read an EPW.")
     ap.add_argument("--outdir", type=Path, default=REPO_ROOT / "results" / "apt305")
     args = ap.parse_args()
 
@@ -384,12 +388,15 @@ def main() -> None:
     args.outdir.mkdir(parents=True, exist_ok=True)
 
     sys.path.insert(0, str(EXAMPLES_DIR))
-    from weather_melbourne import resolve, WeatherUnavailable
+    from weather_melbourne import resolve_and_record, WeatherUnavailable
 
     print("resolving weather…")
     try:
-        weather_source, weather_path, weather_label = resolve(
-            args.weather, args.weather_source, args.allow_site_mismatch
+        # Recorded into run_meta.json so this run's weather can be checked
+        # against any other run's, rather than inferred from a chart subtitle.
+        weather_source, weather_path, weather_label = resolve_and_record(
+            args.weather, args.weather_source, args.allow_site_mismatch,
+            args.outdir, require_epw=args.require_epw,
         )
     except WeatherUnavailable as exc:
         print(f"\nERROR  {exc}\n")

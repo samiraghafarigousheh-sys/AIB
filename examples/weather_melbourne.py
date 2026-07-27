@@ -42,21 +42,64 @@ MELBOURNE_LAT = -37.800
 MELBOURNE_LON = 144.968
 
 # How far an EPW may sit from the building before it is the wrong climate.
-# ~1.5 deg is roughly greater-Melbourne; beyond that the site is different.
-MAX_SITE_OFFSET_DEG = 1.5
+#
+# Two bands, because "wrong city" and "wrong continent" deserve different
+# answers. Inside WARN it is greater-Melbourne and silent. Between WARN and MAX
+# it is a regional Victorian station — a different climate (inland stations run
+# hotter in summer and colder in winter than the coast), so it is accepted but
+# announced, and the station name is carried into every chart label. Beyond MAX
+# it is another region entirely and is refused.
+WARN_SITE_OFFSET_DEG = 1.5
+MAX_SITE_OFFSET_DEG = 2.5
 
-# Public Melbourne TMY mirrors, tried in order. Both zip and bare .epw are
-# handled. These hosts are reachable from Colab; some sandboxes block them.
+# climate.onebuilding.org directory holding every Victorian TMY. Scraping the
+# index is deliberate: TMYx filenames carry a year range that changes with each
+# release (…_TMYx.2009-2023.zip today), so a hardcoded URL rots. Listing the
+# directory and matching AUS_VIC_Melbourne*.zip survives that.
+ONEBUILDING_VIC_INDEX = (
+    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/"
+    "AUS_Australia/VIC_Victoria/"
+)
+
+# Tried before scraping, in order. Both .zip and bare .epw are handled.
 MELBOURNE_EPW_MIRRORS = [
-    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/AUS_Australia/VIC_Victoria/"
-    "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.2009-2023.zip",
-    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/AUS_Australia/VIC_Victoria/"
-    "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.zip",
-    "https://climate.onebuilding.org/WMO_Region_5_Southwest_Pacific/AUS_Australia/VIC_Victoria/"
-    "AUS_VIC_Melbourne.Airport.948660_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Olympic.Park.948656_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Airport.948660_TMYx.2009-2023.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.2007-2021.zip",
+    ONEBUILDING_VIC_INDEX + "AUS_VIC_Melbourne.Regional.Office.948680_TMYx.zip",
     "https://energyplus-weather.s3.amazonaws.com/southwest_pacific_wmo_region_5/AUS/"
     "AUS_Melbourne.948660_IWEC/AUS_Melbourne.948660_IWEC.epw",
 ]
+
+
+def discover_melbourne_urls(timeout: int = 60) -> list[str]:
+    """
+    Scrape the Victoria directory index for Melbourne TMY archives.
+
+    Returns candidate URLs newest-looking first. Any failure returns [] so the
+    caller just falls through to the hardcoded list.
+    """
+    import re
+    import requests
+
+    try:
+        resp = requests.get(ONEBUILDING_VIC_INDEX, timeout=timeout)
+        if resp.status_code != 200:
+            return []
+        hrefs = re.findall(r'href=["\']([^"\']+\.zip)["\']', resp.text, flags=re.I)
+    except Exception:
+        return []
+
+    names = []
+    for h in hrefs:
+        base = h.split("/")[-1]
+        if re.match(r"AUS_VIC_Melbourne", base, flags=re.I):
+            names.append(base)
+    # Prefer TMYx over older TMY/IWEC, and later year ranges first.
+    names.sort(key=lambda n: ("TMYx" not in n, n), reverse=False)
+    names.sort(key=lambda n: re.findall(r"(\d{4})-(\d{4})", n) or [("0", "0")], reverse=True)
+    return [ONEBUILDING_VIC_INDEX + n for n in dict.fromkeys(names)]
 
 
 class WeatherUnavailable(RuntimeError):
@@ -110,6 +153,10 @@ def validate_epw_site(epw_path: Path, strict: bool = True) -> tuple[float, float
         if strict:
             raise WeatherUnavailable(msg)
         print(f"  WARNING {msg}")
+    elif offset > WARN_SITE_OFFSET_DEG:
+        print(f"  NOTE  {city} is {offset:.1f} deg from central Melbourne — a regional "
+              f"Victorian station,\n        not a coastal Melbourne one. Accepted, and "
+              f"labelled '{city}' on every output.")
     return lat, lon, city
 
 
@@ -135,7 +182,15 @@ def download_melbourne_epw(dest_dir: Path = CACHE_DIR, timeout: int = 90) -> Pat
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     failures = []
-    for url in MELBOURNE_EPW_MIRRORS:
+
+    # Known URLs first (cheap), then whatever the directory index actually holds.
+    candidates = list(MELBOURNE_EPW_MIRRORS)
+    discovered = discover_melbourne_urls()
+    if discovered:
+        print(f"  found {len(discovered)} Melbourne archive(s) in the onebuilding index")
+        candidates = discovered + [u for u in candidates if u not in discovered]
+
+    for url in candidates:
         try:
             resp = requests.get(url, timeout=timeout, allow_redirects=True)
             if resp.status_code != 200 or not resp.content:
@@ -254,6 +309,51 @@ def resolve(weather: str | None, weather_source: str,
     except WeatherUnavailable as exc:
         print("  EPW mirrors unreachable; trying PVGIS…")
         return _pvgis_or_raise(f"EPW download failed:\n{exc}")
+
+
+def resolve_and_record(weather: str | None, weather_source: str,
+                       allow_site_mismatch: bool, outdir: Path,
+                       require_epw: bool = False) -> tuple[str, str | None, str]:
+    """
+    Resolve the weather AND record what was chosen next to the results.
+
+    THIS IS THE FIX FOR THE HARNESS-DISAGREEMENT BUG. ``resolve()`` falls back
+    (cached EPW -> download -> PVGIS), so two scripts run minutes apart could
+    legitimately return different sources — one on a Melbourne EPW, one on a
+    PVGIS TMY — and nothing downstream said so. The two baselines then differed
+    by a factor of three on heating while both charts claimed to be "the
+    baseline engine on the same building", which they were: same engine, same
+    building, *different weather*.
+
+    Every run now drops ``run_meta.json`` beside its outputs, so two result
+    directories can be compared and any weather mismatch is immediately visible
+    instead of being argued about from the charts.
+
+    ``require_epw`` refuses a PVGIS fallback outright, for callers (EnergyPlus,
+    or any run that must be comparable with an EnergyPlus run) that cannot use
+    it or must not silently diverge from one.
+    """
+    import json
+
+    source, path, label = resolve(weather, weather_source, allow_site_mismatch)
+    if require_epw and source != "epw":
+        raise WeatherUnavailable(
+            "This run requires an EPW file and PVGIS was selected instead.\n"
+            "EnergyPlus cannot read PVGIS, and an ISO run on PVGIS is not\n"
+            "comparable with an EnergyPlus run on an EPW — that mismatch is\n"
+            "exactly what made the two baseline charts disagree.\n\n"
+            "Pass --weather path/to/Melbourne.epw, or place one in "
+            f"{CACHE_DIR}/."
+        )
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    meta = {"weather_source": source, "weather_path": path, "weather_label": label}
+    if path:
+        lat, lon, city = read_epw_site(Path(path))
+        meta.update(station=city, latitude=lat, longitude=lon,
+                    site_offset_deg=round(site_offset_deg(lat, lon), 3))
+    (outdir / "run_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return source, path, label
 
 
 if __name__ == "__main__":
