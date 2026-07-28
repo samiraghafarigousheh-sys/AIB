@@ -1,0 +1,47 @@
+{
+  "Baseline": {
+    "net_floor_area_m2": 20.0,
+    "Q_H_annual_kWh": 15.861616700444602,
+    "Q_C_annual_kWh": 2027.5064783087112,
+    "Q_internal_gains_kWh": 5356.685952,
+    "Q_ground_loss_kWh": 192.4430473450749,
+    "Q_ground_gain_kWh": 42.43047909747212,
+    "Q_ve_loss_kWh": 2829.2671794379244,
+    "Q_total_annual_kWh": 3775.587191743397,
+    "Q_total_annual_kWh_m2": 188.77935958716984,
+    "Q_latent_annual_kWh": 301.24591042387095,
+    "Q_H_latent_annual_kWh": 1430.9731863103705,
+    "Q_H_annual_kWh_m2": 0.79308083502223,
+    "Q_C_annual_kWh_m2": 101.37532391543556
+  },
+  "+Vent+Latent": {
+    "net_floor_area_m2": 20.0,
+    "Q_H_annual_kWh": 37.33656000953524,
+    "Q_C_annual_kWh": 1727.1772569324041,
+    "Q_internal_gains_kWh": 5356.685952,
+    "Q_ground_loss_kWh": 175.56258968444627,
+    "Q_ground_gain_kWh": 47.23722233905312,
+    "Q_ve_loss_kWh": 3235.422511062455,
+    "Q_total_annual_kWh": 2070.83021984975,
+    "Q_total_annual_kWh_m2": 103.5415109924875,
+    "Q_latent_annual_kWh": 305.5422260855655,
+    "Q_H_latent_annual_kWh": 0.7741768222449446,
+    "Q_H_annual_kWh_m2": 1.8668280004767621,
+    "Q_C_annual_kWh_m2": 86.35886284662021
+  },
+  "+Internal Gains": {
+    "net_floor_area_m2": 20.0,
+    "Q_H_annual_kWh": 1274.562967485711,
+    "Q_C_annual_kWh": 699.8492413841323,
+    "Q_internal_gains_kWh": 730.2912,
+    "Q_ground_loss_kWh": 139.03984545898606,
+    "Q_ground_gain_kWh": 74.5693771133649,
+    "Q_ve_loss_kWh": 1846.0579370775665,
+    "Q_total_annual_kWh": 2615.8983678909603,
+    "Q_total_annual_kWh_m2": 130.794918394548,
+    "Q_latent_annual_kWh": 641.3454976725844,
+    "Q_H_latent_annual_kWh": 0.14066134853303275,
+    "Q_H_annual_kWh_m2": 63.728148374285546,
+    "Q_C_annual_kWh_m2": 34.99246206920661
+  }
+}

@@ -1,0 +1,9 @@
+Metric,Unit,Baseline,+Vent+Latent,+Internal Gains
+Heating,kWh,15.861617,37.336560,1274.562967
+Cooling,kWh,2027.506478,1727.177257,699.849241
+Total internal gains,kWh,5356.685952,5356.685952,730.291200
+Ground loss,kWh,192.443047,175.562590,139.039845
+Ground gain,kWh,42.430479,47.237222,74.569377
+Ventilation+infiltration loss,kWh,2829.267179,3235.422511,1846.057937
+Total energy need,kWh,3775.587192,2070.830220,2615.898368
+Total energy need,kWh/m2,188.779360,103.541511,130.794918

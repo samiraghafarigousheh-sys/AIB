@@ -1,0 +1,4 @@
+State,Branch,Adds,Heating (kWh),Cooling (kWh),Total internal gains (kWh),Ground loss (kWh),Ground gain (kWh),Ventilation+infiltration loss (kWh),Total energy need (kWh),Total energy need (kWh/m2),% vs previous step,% vs original baseline
+Baseline,claude/pybuildingenergy-baseline-anjro8,Unmodified ISO 52016-1,15.861617,2027.506478,5356.685952,192.443047,42.430479,2829.267179,3775.587192,188.779360,,0.000000
++Vent+Latent,claude/ventilation-plus-latent-fix,Ventilation flow-rate + symmetric latent fix,37.336560,1727.177257,5356.685952,175.562590,47.237222,3235.422511,2070.830220,103.541511,-45.152102,-45.152102
++Internal Gains,claude/internal-gains-fix,Step 1 — neighbour-count gain inflation removed,1274.562967,699.849241,730.291200,139.039845,74.569377,1846.057937,2615.898368,130.794918,26.321238,-30.715456
