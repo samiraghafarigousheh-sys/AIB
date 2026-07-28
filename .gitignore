@@ -3,7 +3,16 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.json.tmp
-results/
+
+# Run outputs are throwaway and stay out of the repo -- except the AU-correction
+# step deliverables, which are the reviewable artefact of each step and have to
+# travel with the branch.
+#
+# `results/*` rather than `results/`: git never descends into an excluded
+# directory, so a negation under `results/` would never be reached.
+results/*
+!results/step_*/
+!results/au_corrections_summary/
 
 # Downloaded TMYs stay out of the repo, but the reference EPW is committed:
 # every harness must run on the SAME weather, and a file that has to be fetched
