@@ -294,6 +294,48 @@ def sanitize_and_validate_BUI(bui: dict,
                 add_issue("WARN", f"{path}.orientation.azimuth", f"azimuth recommended in {{0,90,180,270}}; value={az}", fixed=False)
 
     # ---------------------------
+    # 2b) GROUND CONTACT COHERENCE
+    # ---------------------------
+    #
+    # `_ground_contact_area()` returns 0.0 when no surface is tagged
+    # `boundary: "GROUND"`, because absence of a ground surface means no ground
+    # contact rather than "assume the whole floor". That is the right default,
+    # but it makes a missing tag silent -- so say something when the dictionary
+    # contradicts itself: a declared exposed perimeter is a slab edge, and a
+    # slab edge implies a slab.
+    #
+    # Read from the ORIGINAL input, not bui_clean: the building-level checks
+    # above rewrite a zero perimeter to 1.0 when fix=True, and warning on a
+    # value this function invented would be a false positive on every
+    # intermediate-floor building.
+    _orig_building = (bui.get("building", {}) or {}) if isinstance(bui, dict) else {}
+    _declared_perimeter = _orig_building.get("exposed_perimeter", None)
+    try:
+        _declared_perimeter = float(_declared_perimeter)
+    except (TypeError, ValueError):
+        _declared_perimeter = None
+
+    _has_ground_tag = any(
+        str(s.get("boundary", "")).upper() == "GROUND"
+        or str(s.get("ISO52016_type_string", "")).upper() == "GR"
+        for s in bui_clean.get("building_surface", []) or []
+        if isinstance(s, dict)
+    )
+    _legacy_opt_in = bool(_orig_building.get("legacy_ground_inference", False))
+
+    if (not _has_ground_tag and not _legacy_opt_in
+            and _declared_perimeter is not None
+            and np.isfinite(_declared_perimeter) and _declared_perimeter > 0.0):
+        add_issue(
+            "WARN", "building.exposed_perimeter",
+            f"exposed_perimeter={_declared_perimeter} > 0 but no surface is tagged "
+            f'boundary="GROUND", so ground-contact area resolves to 0 and the ground '
+            f"heat-transfer term is inert. If this building really does sit on the "
+            f'ground, tag its floor; if it is an upper storey, exposed_perimeter '
+            f"should be 0.", fixed=False,
+        )
+
+    # ---------------------------
     # 3) ADJACENT ZONES CHECKS
     # ---------------------------
     for j, az in enumerate(bui_clean.get("adjacent_zones", [])):

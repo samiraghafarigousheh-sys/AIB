@@ -1103,14 +1103,45 @@ def _add_annual_balance_columns(
 
 def _ground_contact_area(building_object):
     """
-    Total slab-on-ground area [m2].
-    Prefer explicit GROUND surfaces; fall back to legacy downward surfaces;
-    finally use building net floor area when no surface metadata is available.
+    Total slab-on-ground area [m2]. Returns **0.0** when nothing is in contact
+    with the ground.
+
+    Absence of a ground surface means "no ground contact", not "assume the whole
+    floor". The previous last-resort fallback returned ``building.net_floor_area``
+    whenever no surface was tagged, which silently gave every unclassified
+    building a full-footprint slab. A third-floor apartment came out with a
+    slab-on-ground the size of its floor plate and a non-zero ground loss every
+    hour of the year, with nothing in the output to say so.
+
+    Recognised, in order:
+
+    1. ``boundary == "GROUND"`` -- the explicit tag, always trusted.
+    2. ``ISO52016_type_string == "GR"`` -- the ISO element type, either set by
+       the caller or assigned by the core.
+    3. The legacy sky-view/tilt inference, **opt-in only** (see below).
+
+    LEGACY INFERENCE, AND WHY IT IS OFF BY DEFAULT
+    ----------------------------------------------
+    The old rule was ``sky_view_factor == 0 and (tilt is None or tilt > 170)``.
+    ``tilt > 170`` presumes the convention 0 = upward, 180 = downward. This
+    codebase uses the opposite one -- ``0 = horizontal, 90 = vertical``, stated
+    in the example dictionaries' own ``units`` block -- under which a floor and
+    a ceiling are *both* tilt 0 and cannot be told apart by tilt at all. So the
+    rule matched nothing in practice and quietly fell through to the
+    net-floor-area fallback.
+
+    Rather than pick a threshold that pretends to disambiguate, the inference is
+    now explicit opt-in via ``building.legacy_ground_inference: True``, accepts
+    horizontal surfaces under *either* convention, and additionally requires
+    ``name_adj_zone`` to be empty -- a floor over another zone is a party slab,
+    never ground. It remains a heuristic and says so.
     """
     surfaces = building_object.get("building_surface", []) if isinstance(building_object, dict) else []
+    building = building_object.get("building", {}) if isinstance(building_object, dict) else {}
+    allow_legacy = bool(building.get("legacy_ground_inference", False))
 
     area_ground = 0.0
-    area_fallback = 0.0
+    area_legacy = 0.0
     for surf in surfaces:
         if not isinstance(surf, dict):
             continue
@@ -1127,7 +1158,9 @@ def _ground_contact_area(building_object):
             area_ground += area
             continue
 
-        # Legacy fallback for dictionaries that do not carry an explicit boundary.
+        if not allow_legacy:
+            continue
+
         orientation = surf.get("orientation", {}) or {}
         tilt = orientation.get("tilt", None)
         sky_view_factor = surf.get("sky_view_factor", None)
@@ -1142,31 +1175,24 @@ def _ground_contact_area(building_object):
         except Exception:
             sky_view_factor = None
 
+        # Horizontal under either convention: 0 (this codebase) or ~180 (the one
+        # the old threshold assumed).
+        horizontal = tilt is None or abs(tilt) < 1e-9 or tilt > 170.0
+        faces_another_zone = bool(surf.get("name_adj_zone"))
+
         if (
             sky_view_factor is not None
             and abs(sky_view_factor) < 1e-9
-            and (tilt is None or tilt > 170.0)
+            and horizontal
+            and not faces_another_zone
         ):
-            area_fallback += area
+            area_legacy += area
 
     if area_ground > 0.0:
         return float(area_ground)
-    if area_fallback > 0.0:
-        return float(area_fallback)
-
-    floor_area = None
-    if isinstance(building_object, dict):
-        floor_area = building_object.get("building", {}).get("net_floor_area")
-    try:
-        floor_area = float(floor_area)
-    except Exception:
-        floor_area = None
-    if floor_area is not None and np.isfinite(floor_area) and floor_area > 0.0:
-        return float(floor_area)
-
-    raise ValueError(
-        "Ground-contact area is missing: provide GROUND surfaces or set building.net_floor_area."
-    )
+    if area_legacy > 0.0:
+        return float(area_legacy)
+    return 0.0
 
 
 def _ground_conductance_w_per_k(area_m2: float, ground_data: temp_ground | None) -> float:
@@ -3812,7 +3838,17 @@ class ISO52016:
         """
         
         exposed_perimeter = building_object["building"]["exposed_perimeter"]
-        characteristic_floor_dimension = sog_area / (0.5 * exposed_perimeter)
+        # B' = A / (0.5 * P). With no ground contact A is 0 and B' is 0, which
+        # flows through the ISO 13370 expressions below without producing a
+        # non-finite value -- checked, not assumed. Guard the divisor anyway:
+        # `sanitize_and_validate_BUI` only rewrites a zero perimeter when
+        # fix=True, so an unsanitised dictionary can still reach this line with
+        # P = 0 and raise ZeroDivisionError. A building with no exposed
+        # perimeter has no slab edge, so B' = 0 is the right answer there too.
+        if not np.isfinite(exposed_perimeter) or exposed_perimeter <= 0.0:
+            characteristic_floor_dimension = 0.0
+        else:
+            characteristic_floor_dimension = sog_area / (0.5 * exposed_perimeter)
         # ============================
 
         # ============================
