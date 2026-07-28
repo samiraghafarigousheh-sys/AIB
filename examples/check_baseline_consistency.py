@@ -32,8 +32,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Fractional tolerance. The two harnesses call the same engine with the same
-# inputs, so agreement should be exact; 1e-6 leaves room for CSV rounding only.
+# inputs, so agreement should be exact when both sides are read at full float
+# precision -- which is what the JSON readers below give.
 TOL = 1e-6
+
+# Tolerance when a side can only be read from its rounded CSV. The tables round
+# to 3-4 decimals, so on a ~16 kWh heating figure the rounding alone is worth
+# ~3e-5 -- comfortably above TOL. Comparing rounded numbers at 1e-6 reports a
+# rounding artefact as a harness discrepancy, which is exactly the false alarm
+# this script exists to rule out. Falling back is announced, not silent.
+CSV_TOL = 1e-4
 
 
 def _meta(d: Path) -> dict:
@@ -43,8 +51,23 @@ def _meta(d: Path) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def _branch_baseline(d: Path) -> dict[str, float]:
-    """Heating and cooling from the Baseline column of comparison.csv."""
+def _branch_baseline(d: Path) -> tuple[dict[str, float], bool]:
+    """
+    Heating and cooling for the Baseline branch.
+
+    Prefers ``results.json`` (raw engine floats) and falls back to the rounded
+    ``comparison.csv`` for result directories written before that file existed.
+    Returns (values, exact) where ``exact`` says whether full precision was
+    available.
+    """
+    raw = d / "results.json"
+    if raw.is_file():
+        blob = json.loads(raw.read_text(encoding="utf-8"))
+        base = blob.get("Baseline", {})
+        if "Q_H_annual_kWh" in base and "Q_C_annual_kWh" in base:
+            return ({"heating_kWh": float(base["Q_H_annual_kWh"]),
+                     "cooling_kWh": float(base["Q_C_annual_kWh"])}, True)
+
     p = d / "comparison.csv"
     if not p.is_file():
         raise SystemExit(f"missing {p} — run compare_branches_apt305.py first")
@@ -55,11 +78,23 @@ def _branch_baseline(d: Path) -> dict[str, float]:
                 out["heating_kWh"] = float(row["Baseline"])
             elif row["Metric"] == "Cooling need":
                 out["cooling_kWh"] = float(row["Baseline"])
-    return out
+    return out, False
 
 
-def _ep_iso(d: Path) -> dict[str, float]:
-    """Heating and cooling from the ISO column of baseline_vs_energyplus.csv."""
+def _ep_iso(d: Path) -> tuple[dict[str, float], bool]:
+    """
+    Heating and cooling for the ISO side of the EnergyPlus comparison.
+
+    Prefers ``iso_results.json`` (raw engine floats), falling back to the
+    rounded ``baseline_vs_energyplus.csv``.
+    """
+    raw = d / "iso_results.json"
+    if raw.is_file():
+        blob = json.loads(raw.read_text(encoding="utf-8"))
+        if "heating_kWh" in blob and "cooling_kWh" in blob:
+            return ({"heating_kWh": float(blob["heating_kWh"]),
+                     "cooling_kWh": float(blob["cooling_kWh"])}, True)
+
     p = d / "baseline_vs_energyplus.csv"
     if not p.is_file():
         raise SystemExit(f"missing {p} — run baseline_vs_energyplus.py first")
@@ -70,7 +105,7 @@ def _ep_iso(d: Path) -> dict[str, float]:
                 out["heating_kWh"] = float(row["ISO_52016_kWh"])
             elif row["Metric"] == "Cooling":
                 out["cooling_kWh"] = float(row["ISO_52016_kWh"])
-    return out
+    return out, False
 
 
 def main() -> None:
@@ -95,7 +130,20 @@ def main() -> None:
               "      compared. Re-run both with the same --weather file.\n")
         sys.exit(1)
 
-    a, b = _branch_baseline(args.branches), _ep_iso(args.vs_ep)
+    a, a_exact = _branch_baseline(args.branches)
+    b, b_exact = _ep_iso(args.vs_ep)
+
+    # Only demand bit-level agreement when both sides were read at full
+    # precision; otherwise the rounding in the tables sets the floor.
+    exact = a_exact and b_exact
+    tol = TOL if exact else CSV_TOL
+    if not exact:
+        stale = [n for n, e in (("compare_branches", a_exact),
+                                ("baseline_vs_energyplus", b_exact)) if not e]
+        print(f"note: reading rounded table values for {', '.join(stale)} "
+              f"(no raw JSON in that\n      results directory), so the tolerance "
+              f"is {tol:.0e} rather than {TOL:.0e}.\n")
+
     ok = True
     head = f"{'Metric':<12}{'compare_branches':>20}{'baseline_vs_EP':>18}{'rel. diff':>14}"
     print(head)
@@ -104,7 +152,7 @@ def main() -> None:
         x, y = a.get(key, float("nan")), b.get(key, float("nan"))
         denom = max(abs(x), abs(y), 1e-12)
         rel = abs(x - y) / denom
-        ok &= rel <= TOL
+        ok &= rel <= tol
         print(f"{label:<12}{x:>20,.6f}{y:>18,.6f}{rel:>14.2e}")
     print()
 

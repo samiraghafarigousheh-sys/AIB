@@ -10,6 +10,7 @@ quantify the effect of individual physics improvements on predicted energy deman
 | `pybuildingenergy/` | Vendored upstream engine — see [VENDORING.md](VENDORING.md)          |
 | `VENDORING.md`      | Upstream provenance and verification procedure                       |
 | `CHANGES.md`        | Log of physics modifications (added on the modification branches)    |
+| `RUN_ORDER.md`      | The four process steps in order, with commands and verified output   |
 
 ## Branch structure
 
@@ -33,11 +34,12 @@ neighbours, zeroed thermal mass and ideal loads.
 
 ### Run it in Google Colab
 
-Open `notebooks/AIB_apt305_colab.ipynb`, or paste this single cell into a blank
+Open `notebooks/AIB_apt305_colab.ipynb`, which runs the whole process in order —
+see [RUN_ORDER.md](RUN_ORDER.md). Or paste this single cell into a blank
 notebook:
 
 ```python
-!git clone --quiet --branch claude/window-plus-dynamic-hce-anjro8 \
+!git clone --quiet --branch main \
     https://github.com/samiraghafarigousheh-sys/AIB.git AIB
 %cd AIB
 !git fetch --quiet origin '+refs/heads/*:refs/remotes/origin/*'
@@ -52,7 +54,13 @@ display(Image("results/apt305/apt305_comparison.png"))
 ```
 
 Repository: `https://github.com/samiraghafarigousheh-sys/AIB.git`
-Branch: `claude/window-plus-dynamic-hce-anjro8`
+Branch: **`main`** — it is the harness branch: it carries every example script,
+the notebook, and the correct Melbourne EPW. The engine branches are checked out
+into throwaway worktrees by the comparison scripts, so `git fetch` above must
+bring all of them down, but none of them is what you clone. Cloning an engine
+branch instead gives you a partial `examples/` directory and, on
+`claude/window-plus-dynamic-hce-anjro8`, the superseded inland Charlton EPW.
+
 If the repo is private, clone with a personal access token:
 `https://<TOKEN>@github.com/samiraghafarigousheh-sys/AIB.git`
 
@@ -145,6 +153,7 @@ python examples/compare_branches_apt305.py --weather-source pvgis # TMY at the b
 | `examples/apt305_building.py` | Building definition only — no engine import, so one dictionary feeds every engine version |
 | `examples/weather_melbourne.py` | Weather resolution, the site-validation guard, and `run_meta.json` recording |
 | `examples/compare_branches_apt305.py` | Checks out each branch into a throwaway worktree, runs it in its own subprocess, emits table + chart |
+| `examples/compare_ventilation_latent.py` | Same harness for the ventilation / latent branches — a separate layering off the baseline, not a continuation of the window branches |
 | `examples/baseline_vs_energyplus.py` | Baseline ISO vs EnergyPlus: alignment audit, table, bar chart, Sankey |
 | `examples/check_baseline_consistency.py` | Asserts both harnesses report the same baseline result, weather first |
 | `notebooks/AIB_apt305_colab.ipynb` | Colab notebook |
