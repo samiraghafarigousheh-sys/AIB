@@ -627,13 +627,39 @@ class VentilationInternalGains:
                     q_int_light = full_load
 
         q_int_total = q_int_occ * h_occup + q_int_app * h_app + q_int_light * h_light
+
+        # Internal gains belong to the zone that generates them: A_use * q_int,
+        # and nothing else, however many neighbours the zone has.
+        #
+        # The branch removed here used to re-add *this* zone's own gain once per
+        # adjacent zone, undiscounted, plus a (1 - b_ztu)-weighted term:
+        #
+        #     for zones in range(list_adj_zones):
+        #         Phi_int_z_t += Phi_int_dir_z_t + (1-b_ztu)*Fztc_ztu_m*Phi_int_dir_z_t
+        #
+        # It transferred nothing from the neighbour -- q_int_total is built from
+        # THIS zone's building_type_class and a_use, so the loop simply
+        # multiplied the zone's own gain by 1 + n*(1 + (1-b_ztu)*F_ztc_ztu_m).
+        # For apt 305 (5 neighbours, trailing b_ztu = 0.733 from the corridor)
+        # that is a factor of 7.33: a 144 W apartment reported as 1 056 W. It
+        # also silently used whichever b_ztu and F_ztc_ztu_m happened to survive
+        # the caller's loop, i.e. the last adjacent zone's, for all of them.
+        #
+        # Heat that genuinely crosses a partition is already modelled, exactly
+        # once, in utils.py. The neighbour's own gains are computed separately
+        # as `phi_gn_dir_ztu` -- from the ADJACENT zone's building_type_class and
+        # a_use -- and enter the buffer temperature as
+        #
+        #     theta_ztu = theta_int - b_ztu*(theta_int - T_e) + phi_gn_dir_ztu/H_ztu
+        #
+        # which then drives conduction across the shared surface. Re-adding
+        # anything here would double-count that pathway.
+        #
+        # `unconditioned_zones_nearby`, `list_adj_zones`, `Fztc_ztu_m` and
+        # `b_ztu` stay in the signature -- utils.py passes them at two call
+        # sites in each single-zone core -- but no longer scale the result.
         Phi_int_z_t = q_int_total * a_use
 
-        if unconditioned_zones_nearby:
-            Phi_int_dir_z_t = q_int_total * a_use
-            for zones in range(list_adj_zones):
-                Phi_int_z_t +=Phi_int_dir_z_t + (1-b_ztu)*Fztc_ztu_m * Phi_int_dir_z_t
-        
         return float(Phi_int_z_t)
 
 

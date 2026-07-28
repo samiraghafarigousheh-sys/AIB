@@ -125,6 +125,13 @@ def check_heating_system_inputs(system_input: dict):
 
 
 
+# Plausible indoor setpoint band for a conditioned adjacent zone [degC]. Wide on
+# purpose: this only raises a WARN, and the point is to catch a unit slip or a
+# stray sentinel, not to police a design choice.
+ADJ_SETPOINT_MIN_C = 5.0
+ADJ_SETPOINT_MAX_C = 35.0
+
+
 def sanitize_and_validate_BUI(bui: dict,
                               fix: bool = True,
                               eps: float = 1e-6,
@@ -287,6 +294,48 @@ def sanitize_and_validate_BUI(bui: dict,
                 add_issue("WARN", f"{path}.orientation.azimuth", f"azimuth recommended in {{0,90,180,270}}; value={az}", fixed=False)
 
     # ---------------------------
+    # 2b) GROUND CONTACT COHERENCE
+    # ---------------------------
+    #
+    # `_ground_contact_area()` returns 0.0 when no surface is tagged
+    # `boundary: "GROUND"`, because absence of a ground surface means no ground
+    # contact rather than "assume the whole floor". That is the right default,
+    # but it makes a missing tag silent -- so say something when the dictionary
+    # contradicts itself: a declared exposed perimeter is a slab edge, and a
+    # slab edge implies a slab.
+    #
+    # Read from the ORIGINAL input, not bui_clean: the building-level checks
+    # above rewrite a zero perimeter to 1.0 when fix=True, and warning on a
+    # value this function invented would be a false positive on every
+    # intermediate-floor building.
+    _orig_building = (bui.get("building", {}) or {}) if isinstance(bui, dict) else {}
+    _declared_perimeter = _orig_building.get("exposed_perimeter", None)
+    try:
+        _declared_perimeter = float(_declared_perimeter)
+    except (TypeError, ValueError):
+        _declared_perimeter = None
+
+    _has_ground_tag = any(
+        str(s.get("boundary", "")).upper() == "GROUND"
+        or str(s.get("ISO52016_type_string", "")).upper() == "GR"
+        for s in bui_clean.get("building_surface", []) or []
+        if isinstance(s, dict)
+    )
+    _legacy_opt_in = bool(_orig_building.get("legacy_ground_inference", False))
+
+    if (not _has_ground_tag and not _legacy_opt_in
+            and _declared_perimeter is not None
+            and np.isfinite(_declared_perimeter) and _declared_perimeter > 0.0):
+        add_issue(
+            "WARN", "building.exposed_perimeter",
+            f"exposed_perimeter={_declared_perimeter} > 0 but no surface is tagged "
+            f'boundary="GROUND", so ground-contact area resolves to 0 and the ground '
+            f"heat-transfer term is inert. If this building really does sit on the "
+            f'ground, tag its floor; if it is an upper storey, exposed_perimeter '
+            f"should be 0.", fixed=False,
+        )
+
+    # ---------------------------
     # 3) ADJACENT ZONES CHECKS
     # ---------------------------
     for j, az in enumerate(bui_clean.get("adjacent_zones", [])):
@@ -322,6 +371,47 @@ def sanitize_and_validate_BUI(bui: dict,
                     add_issue("WARN", f"{path}.transmittance_U_elements", f"U<=0 at idx {bad}; set to {D['opaque_u_default']}", fixed=True)
                 else:
                     add_issue("ERROR", f"{path}.transmittance_U_elements", f"U<=0 ai idx {bad}", fixed=False)
+
+        # conditioned / setpoint (optional; default: unconditioned buffer)
+        #
+        # A zone marked conditioned is held at its setpoint instead of being run
+        # through the ISO 13789 buffer formula, so a wrong value here moves
+        # transmission through every shared surface. Both fields are validated,
+        # neither is required, and absence reproduces the previous behaviour.
+        conditioned = az.get("conditioned", None)
+        if conditioned is not None and not isinstance(conditioned, (bool, np.bool_)):
+            if fix:
+                az["conditioned"] = bool(conditioned)
+                add_issue("WARN", f"{path}.conditioned",
+                          f"conditioned should be a bool; coerced {conditioned!r} -> {bool(conditioned)}",
+                          fixed=True)
+            else:
+                add_issue("ERROR", f"{path}.conditioned",
+                          f"conditioned should be a bool; value={conditioned!r}", fixed=False)
+
+        setpoint = az.get("setpoint", None)
+        if setpoint is not None:
+            ok = isinstance(setpoint, (int, float)) and not isinstance(setpoint, bool) \
+                and np.isfinite(float(setpoint))
+            if not ok:
+                add_issue("ERROR", f"{path}.setpoint",
+                          f"setpoint should be a finite number [degC]; value={setpoint!r}",
+                          fixed=False)
+            elif not (ADJ_SETPOINT_MIN_C <= float(setpoint) <= ADJ_SETPOINT_MAX_C):
+                # Module constants, not D: `defaults` is caller-replaceable in
+                # full, so a caller passing their own dict would KeyError here.
+                add_issue("WARN", f"{path}.setpoint",
+                          f"setpoint={setpoint} degC is outside the plausible indoor range "
+                          f"[{ADJ_SETPOINT_MIN_C}, {ADJ_SETPOINT_MAX_C}]", fixed=False)
+
+        if bool(az.get("conditioned", False)) and setpoint is None:
+            # Not an error: the engine falls back to the zone's own previous
+            # operative temperature, which is dT = 0 across the shared surface.
+            # Worth saying out loud, because "conditioned to what?" is exactly
+            # the question a reviewer should be asking.
+            add_issue("WARN", f"{path}.setpoint",
+                      "conditioned=True without a setpoint; the adjacent zone will track "
+                      "this zone's own operative temperature (dT = 0)", fixed=False)
     
     # -------------------------------------------------------------------
     # 4) ADJACENCY PAIRING CAPS + FINESTRE + SPLIT ESTERNO
