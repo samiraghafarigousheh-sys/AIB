@@ -9,6 +9,21 @@ differ, isolating steady-state conduction and radiation physics.
 This module holds *only* the building definition, with no engine import, so the
 same dictionary can be fed to several different engine versions in the same
 comparison run.
+
+SURFACE TYPING
+--------------
+The five party surfaces carry ``type: "adjacent"``, not ``"opaque"``. This is
+load-bearing, not cosmetic: the engine classifies a surface as ADJ purely from
+``type``, and a ``name_adj_zone`` on an ``"opaque"`` surface is silently
+ignored. Typed ``"opaque"``, all five were modelled as **exterior walls exposed
+to outdoor air and sky** — the apartment was effectively outdoors on six sides,
+``theta_ztu`` was computed every timestep and never consumed, and the adjacency
+pairing checks in ``check_input.py`` (which also key off ``type == "adjacent"``)
+never ran either. Any figure produced before this was corrected is for a
+free-standing 20 m² box, not an apartment inside a block.
+
+Only the *type* changed. Areas, U-values, capacities, orientations and the
+adjacent-zone definitions are untouched.
 """
 
 from __future__ import annotations
@@ -38,6 +53,21 @@ HEIGHT = 2.7   # ceiling height, m
 
 FLOOR_AREA = LEN_NS * LEN_EW
 VOLUME = FLOOR_AREA * HEIGHT
+
+# Temperature the five neighbours are held at, in degC.
+#
+# All five are marked ``conditioned: True``, which stops the engine running them
+# through the ISO 13789 unconditioned-buffer model (b_ztu 0.73-0.93, i.e. mostly
+# tracking outdoor air) and holds them here instead. Four of them are occupied
+# apartments identical to this one, so that is straightforwardly right.
+#
+# THE CORRIDOR IS AN ASSUMPTION, NOT A MEASUREMENT. Common corridors in this
+# building type are usually tempered, but the actual services at 50 Barry St
+# have not been checked. It is the least-insulated neighbour (b_ztu 0.733, the
+# lowest of the five) so it carries the most weight of any single zone: if the
+# corridor turns out to be unconditioned, set ``conditioned: False`` on that
+# entry alone and re-run. Flagged rather than assumed silently.
+ADJ_SETPOINT = 20.0
 
 A_WEST_GROSS = LEN_NS * HEIGHT
 A_EAST_GROSS = LEN_NS * HEIGHT
@@ -87,6 +117,8 @@ def build_bui() -> dict:
                 "volume": VOLUME,
                 "building_type_class": "Residential_apartment",
                 "a_use": FLOOR_AREA,
+                "conditioned": True,
+                "setpoint": ADJ_SETPOINT,
             },
             {
                 "name": "apt_below",
@@ -102,6 +134,8 @@ def build_bui() -> dict:
                 "volume": VOLUME,
                 "building_type_class": "Residential_apartment",
                 "a_use": FLOOR_AREA,
+                "conditioned": True,
+                "setpoint": ADJ_SETPOINT,
             },
             {
                 "name": "apt_north",
@@ -117,6 +151,8 @@ def build_bui() -> dict:
                 "volume": VOLUME,
                 "building_type_class": "Residential_apartment",
                 "a_use": FLOOR_AREA,
+                "conditioned": True,
+                "setpoint": ADJ_SETPOINT,
             },
             {
                 "name": "apt_south",
@@ -132,6 +168,8 @@ def build_bui() -> dict:
                 "volume": VOLUME,
                 "building_type_class": "Residential_apartment",
                 "a_use": FLOOR_AREA,
+                "conditioned": True,
+                "setpoint": ADJ_SETPOINT,
             },
             {
                 "name": "corridor",
@@ -143,6 +181,10 @@ def build_bui() -> dict:
                 "volume": 162.0,
                 "building_type_class": "Residential_apartment",
                 "a_use": 60.0,
+                # See ADJ_SETPOINT: the corridor is assumed tempered, NOT verified
+                # against the building's actual services.
+                "conditioned": True,
+                "setpoint": ADJ_SETPOINT,
             },
         ],
         "building_surface": [
@@ -153,31 +195,31 @@ def build_bui() -> dict:
                 "name_adj_zone": None, "height": HEIGHT, "length": LEN_NS,
             },
             {
-                "name": "North wall to Apt 306", "type": "opaque", "area": A_NORTH_GROSS,
+                "name": "North wall to Apt 306", "type": "adjacent", "area": A_NORTH_GROSS,
                 "sky_view_factor": 0.0, "u_value": U_INT_WALL, "solar_absorptance": ABS_INT,
                 "thermal_capacity": C_INT_WALL, "orientation": {"azimuth": 0.0, "tilt": 90.0},
                 "name_adj_zone": "apt_north", "height": HEIGHT, "length": LEN_EW,
             },
             {
-                "name": "South wall to Apt 304", "type": "opaque", "area": A_SOUTH_GROSS,
+                "name": "South wall to Apt 304", "type": "adjacent", "area": A_SOUTH_GROSS,
                 "sky_view_factor": 0.0, "u_value": U_INT_WALL, "solar_absorptance": ABS_INT,
                 "thermal_capacity": C_INT_WALL, "orientation": {"azimuth": 180.0, "tilt": 90.0},
                 "name_adj_zone": "apt_south", "height": HEIGHT, "length": LEN_EW,
             },
             {
-                "name": "East wall to corridor", "type": "opaque", "area": A_EAST_GROSS,
+                "name": "East wall to corridor", "type": "adjacent", "area": A_EAST_GROSS,
                 "sky_view_factor": 0.0, "u_value": U_INT_WALL, "solar_absorptance": ABS_INT,
                 "thermal_capacity": C_INT_WALL, "orientation": {"azimuth": 90.0, "tilt": 90.0},
                 "name_adj_zone": "corridor", "height": HEIGHT, "length": LEN_NS,
             },
             {
-                "name": "Floor to Apt 205", "type": "opaque", "area": FLOOR_AREA,
+                "name": "Floor to Apt 205", "type": "adjacent", "area": FLOOR_AREA,
                 "sky_view_factor": 0.0, "u_value": U_INT_SLAB, "solar_absorptance": ABS_INT,
                 "thermal_capacity": C_INT_SLAB, "orientation": {"azimuth": 0.0, "tilt": 0.0},
                 "name_adj_zone": "apt_below", "height": LEN_NS, "length": LEN_EW,
             },
             {
-                "name": "Ceiling to Apt 405", "type": "opaque", "area": FLOOR_AREA,
+                "name": "Ceiling to Apt 405", "type": "adjacent", "area": FLOOR_AREA,
                 "sky_view_factor": 0.0, "u_value": U_INT_SLAB, "solar_absorptance": ABS_INT,
                 "thermal_capacity": C_INT_SLAB, "orientation": {"azimuth": 0.0, "tilt": 0.0},
                 "name_adj_zone": "apt_above", "height": LEN_NS, "length": LEN_EW,

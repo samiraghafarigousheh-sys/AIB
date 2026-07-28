@@ -2,3 +2,4 @@ State,Branch,Adds,Heating (kWh),Cooling (kWh),Total internal gains (kWh),Ground 
 Baseline,claude/pybuildingenergy-baseline-anjro8,Unmodified ISO 52016-1,1308.601259,741.828246,5356.685952,90.199104,2.774284,1868.484547,3457.163697,172.858185,,0.000000
 +Vent+Latent,claude/ventilation-plus-latent-fix,Ventilation flow-rate + symmetric latent fix,1522.608643,646.250542,5356.685952,84.696141,3.275043,2377.307089,2573.532178,128.676609,-25.559435,-25.559435
 +Internal Gains,claude/internal-gains-fix,Step 1 — neighbour-count gain inflation removed,3228.226304,308.302638,730.291200,63.120759,7.800674,1796.617236,4207.225623,210.361281,63.480591,21.695875
++Conditioned Zones,claude/conditioned-adjacent-zones-fix,Step 2 — conditioned neighbours held at their setpoint,123.387740,20.060292,730.291200,68.806827,2.194788,2096.259991,697.098904,34.854945,-83.430912,-79.836104
