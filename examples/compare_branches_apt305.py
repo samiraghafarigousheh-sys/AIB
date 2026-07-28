@@ -190,6 +190,26 @@ def print_table(results: dict[str, dict]) -> list[list]:
     return rows
 
 
+def write_results_json(results: dict[str, dict], outdir: Path) -> None:
+    """
+    Dump every branch's raw metrics at full float precision.
+
+    ``comparison.csv`` rounds to 4 decimals, which is fine for reading but not
+    for asserting that two harnesses drove the *same* engine:
+    ``check_baseline_consistency.py`` compares at 1e-6, and 15.8616 against the
+    engine's 15.861616700444602 is already 1.05e-6 apart — a rounding artefact
+    reported as a harness discrepancy. The check reads this file instead, so the
+    comparison is between the numbers the engine actually produced.
+    """
+    (outdir / "results.json").write_text(
+        json.dumps(
+            {name: results.get(name, {}) for name, _b, _d in BRANCHES},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
 def write_tables(rows: list[list], outdir: Path) -> None:
     names = [n for n, _, _ in BRANCHES]
     header = ["Metric", "Unit", *names, "C1 vs base %", "C2 vs C1 %", "C2 vs base %"]
@@ -429,9 +449,11 @@ def main() -> None:
 
     rows = print_table(results)
     write_tables(rows, args.outdir)
+    write_results_json(results, args.outdir)
     chart = make_chart(results, args.outdir, subtitle)
 
     print(f"table  -> {args.outdir / 'comparison.csv'}")
+    print(f"raw    -> {args.outdir / 'results.json'}")
     print(f"table  -> {args.outdir / 'comparison.md'}")
     print(f"chart  -> {chart}")
 
