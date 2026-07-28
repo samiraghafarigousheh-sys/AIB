@@ -784,6 +784,99 @@ def _has_ventilation_components(building_object) -> bool:
     return isinstance(components, list) and len(components) > 0
 
 
+DEFAULT_THETA_ZTU_INIT_C = 15.0
+
+
+def _adjacent_zone_conditioning(building_object) -> list:
+    """
+    Read the optional ``conditioned`` / ``setpoint`` fields off each adjacent zone.
+
+    ISO 52016-1 routes every adjacent zone through the ISO 13789 unconditioned
+    buffer model:
+
+        theta_ztu = theta_int - b_ztu*(theta_int - T_e) + phi_gn_dir_ztu/H_ztu
+
+    With ``b_ztu`` typically 0.7-0.95 that makes the neighbour track *outdoor*
+    air, which is right for an attic, a garage or an unheated stairwell. It is
+    wrong for a party wall shared with another occupied, conditioned apartment:
+    those sit near the zone's own temperature, so the real heat exchange across
+    the shared surface is small, and the buffer model books a large phantom
+    transmission loss in winter and gain in summer instead.
+
+    A zone marked ``conditioned: True`` is therefore held at its declared
+    ``setpoint`` instead of being run through the buffer formula. Both fields are
+    optional and default to the previous behaviour, so existing dictionaries are
+    unaffected.
+
+    Returns one ``(conditioned, setpoint_or_None)`` pair per adjacent zone, in
+    ``building_object['adjacent_zones']`` order -- the same order the caller
+    indexes ``theta_ztu`` columns by.
+    """
+    zones = (building_object or {}).get("adjacent_zones", []) or []
+    out = []
+    for z in zones:
+        if not isinstance(z, dict):
+            out.append((False, None))
+            continue
+        conditioned = bool(z.get("conditioned", False))
+        setpoint = z.get("setpoint", None)
+        if setpoint is not None:
+            try:
+                setpoint = float(setpoint)
+            except (TypeError, ValueError):
+                setpoint = None
+            if setpoint is not None and not np.isfinite(setpoint):
+                setpoint = None
+        out.append((conditioned, setpoint))
+    return out
+
+
+def _init_theta_ztu(building_object, list_adj_zones: int, Tstepn: int,
+                    default_c: float = DEFAULT_THETA_ZTU_INIT_C):
+    """
+    Allocate and seed the adjacent-zone temperature array.
+
+    Unconditioned zones keep the historical cold-start value; conditioned zones
+    start at their own setpoint, so ``theta_ztu`` equals the declared setpoint at
+    *every* timestep including the ones before the solver's first update. Without
+    this the first hour would see a 15 C neighbour behind a party wall declared
+    to be at 20 C.
+    """
+    cond = _adjacent_zone_conditioning(building_object)
+
+    if list_adj_zones == 1:
+        theta_ztu = np.full(Tstepn, 0.0, dtype=float)
+        seed = default_c
+        if cond and cond[0][0]:
+            seed = cond[0][1] if cond[0][1] is not None else default_c
+        theta_ztu[0] = seed
+        return theta_ztu
+
+    theta_ztu = np.zeros((Tstepn, list_adj_zones), dtype=float)
+    theta_ztu[:2] = default_c
+    for z in range(min(list_adj_zones, len(cond))):
+        conditioned, setpoint = cond[z]
+        if conditioned and setpoint is not None:
+            theta_ztu[:2, z] = setpoint
+    return theta_ztu
+
+
+def _theta_ztu_unconditioned(theta_int_prev: float, t_ext: float, b_ztu: float,
+                             phi_gn_dir_ztu: float, H_ztu: float,
+                             c_ztu_h_max: float = 1.0) -> float:
+    """
+    ISO 13789 unconditioned-buffer temperature, with the table B.16 cap.
+
+    Extracted verbatim from the two single-zone cores so the conditioned /
+    unconditioned branch reads as one decision in both, rather than the formula
+    being repeated four times.
+    """
+    theta = (theta_int_prev
+             - b_ztu * (theta_int_prev - t_ext)
+             + (phi_gn_dir_ztu / H_ztu if H_ztu else 0.0))
+    return min(t_ext + c_ztu_h_max * (theta_int_prev - t_ext), theta)
+
+
 def _ventilation_stream_diag(boundary: VentilationBoundary, zone_temperature_c: float) -> dict[str, dict[str, float]]:
     """Return per-stream ventilation diagnostics for componentized boundaries."""
 
@@ -7551,12 +7644,12 @@ class ISO52016:
         # Time step for indoor temperature in adjacent zones
         if building_object['building']['adj_zones_present']:
             list_adj_zones = building_object['building']['number_adj_zone']
-            if list_adj_zones == 1:
-                theta_ztu = np.zeros(Tstepn)
-                theta_ztu[0] = 15
-            elif list_adj_zones > 1:
-                theta_ztu = np.zeros((Tstepn, list_adj_zones))
-                theta_ztu[:2] = 15
+            # Conditioned neighbours are seeded at their own setpoint rather than
+            # the historical 15 C cold start, so theta_ztu equals the declared
+            # setpoint at every timestep -- including the ones before the solver
+            # first updates it.
+            if list_adj_zones >= 1:
+                theta_ztu = _init_theta_ztu(building_object, list_adj_zones, Tstepn)
                 
         
         # Generate profiles
@@ -8065,22 +8158,56 @@ class ISO52016:
                     # ========================================
                     if building_object['building']['adj_zones_present']:
                         c_ztu_h_max = 1 # from table B.16 
+                        adj_conditioning = _adjacent_zone_conditioning(building_object)
+                        theta_int_prev = Theta_int_op[Tstepi-1,0] if Tstepi > 0 else None
                         if Tstepi >0:
                             # Single zones
                             if list_adj_zones == 1:
-                                theta_ztu_t = (Theta_int_op[Tstepi-1,0] - b_ztu*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]) + (phi_gn_dir_ztu/H_ztu))
-                                theta_ztu_t_checked = min(T2m_arr[Tstepi] + c_ztu_h_max*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]), theta_ztu_t)
-                                theta_ztu[Tstepi] = theta_ztu_t_checked
+                                conditioned, setpoint = (adj_conditioning[0]
+                                                         if adj_conditioning else (False, None))
+                                if conditioned:
+                                    # A conditioned neighbour is held at its own
+                                    # setpoint: dT across the shared surface is
+                                    # ~0, so the exchange is negligible rather
+                                    # than the large phantom flow the buffer
+                                    # model produces. Falling back to this zone's
+                                    # own previous operative temperature when no
+                                    # setpoint is declared gives dT = 0 exactly.
+                                    theta_ztu[Tstepi] = (setpoint if setpoint is not None
+                                                         else theta_int_prev)
+                                else:
+                                    theta_ztu[Tstepi] = _theta_ztu_unconditioned(
+                                        theta_int_prev, T2m_arr[Tstepi], b_ztu,
+                                        phi_gn_dir_ztu, H_ztu, c_ztu_h_max,
+                                    )
                             
                             # Multiple zones
                             elif list_adj_zones > 1:
                                 for z in range(list_adj_zones):
                                     zone = building_object['adjacent_zones'][z]
-                                    H_ztu = H_ztu_zones_df.loc['H_ztu'][zone['name']]
-                                    theta_ztu_t = (Theta_int_op[Tstepi-1,0] - b_ztu*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]) + (phi_gn_dir_ztu/H_ztu))
-                                    theta_ztu_t_checked = min(T2m_arr[Tstepi] + c_ztu_h_max*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]), theta_ztu_t)
-                                    theta_ztu[Tstepi,z] = theta_ztu_t_checked
-                        theta_ztu_df = pd.DataFrame(theta_ztu, columns=H_ztu_zones_df.columns.tolist())
+                                    conditioned, setpoint = (adj_conditioning[z]
+                                                             if z < len(adj_conditioning)
+                                                             else (False, None))
+                                    if conditioned:
+                                        theta_ztu[Tstepi,z] = (setpoint if setpoint is not None
+                                                               else theta_int_prev)
+                                        continue
+                                    # b_ztu is read per zone here. It used to be
+                                    # whichever scalar the coefficient loop above
+                                    # left in scope -- the LAST adjacent zone's --
+                                    # applied to all of them, so reordering the
+                                    # dictionary changed the result.
+                                    H_ztu_z = H_ztu_zones_df.loc['H_ztu'][zone['name']]
+                                    b_ztu_z = H_ztu_zones_df.loc['b_ztu'][zone['name']]
+                                    theta_ztu[Tstepi,z] = _theta_ztu_unconditioned(
+                                        theta_int_prev, T2m_arr[Tstepi], b_ztu_z,
+                                        phi_gn_dir_ztu, H_ztu_z, c_ztu_h_max,
+                                    )
+                        # H_ztu_zones_df only exists for the multi-zone path; the
+                        # single-zone path used to reach this line and raise
+                        # NameError. Guarded rather than fixed as physics.
+                        if list_adj_zones > 1:
+                            theta_ztu_df = pd.DataFrame(theta_ztu, columns=H_ztu_zones_df.columns.tolist())
 
                     for Eli in range(bui_eln):
                         n_nodes = nodes.Pln[Eli]
@@ -9131,12 +9258,12 @@ class ISO52016:
         # Time step for indoor temperature in adjacent zones
         if building_object['building']['adj_zones_present']:
             list_adj_zones = building_object['building']['number_adj_zone']
-            if list_adj_zones == 1:
-                theta_ztu = np.zeros(Tstepn)
-                theta_ztu[0] = 15
-            elif list_adj_zones > 1:
-                theta_ztu = np.zeros((Tstepn, list_adj_zones))
-                theta_ztu[:2] = 15
+            # Conditioned neighbours are seeded at their own setpoint rather than
+            # the historical 15 C cold start, so theta_ztu equals the declared
+            # setpoint at every timestep -- including the ones before the solver
+            # first updates it.
+            if list_adj_zones >= 1:
+                theta_ztu = _init_theta_ztu(building_object, list_adj_zones, Tstepn)
                 
         
         # Generate profiles
@@ -9688,22 +9815,56 @@ class ISO52016:
                     # ========================================
                     if building_object['building']['adj_zones_present']:
                         c_ztu_h_max = 1 # from table B.16 
+                        adj_conditioning = _adjacent_zone_conditioning(building_object)
+                        theta_int_prev = Theta_int_op[Tstepi-1,0] if Tstepi > 0 else None
                         if Tstepi >0:
                             # Single zones
                             if list_adj_zones == 1:
-                                theta_ztu_t = (Theta_int_op[Tstepi-1,0] - b_ztu*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]) + (phi_gn_dir_ztu/H_ztu))
-                                theta_ztu_t_checked = min(T2m_arr[Tstepi] + c_ztu_h_max*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]), theta_ztu_t)
-                                theta_ztu[Tstepi] = theta_ztu_t_checked
+                                conditioned, setpoint = (adj_conditioning[0]
+                                                         if adj_conditioning else (False, None))
+                                if conditioned:
+                                    # A conditioned neighbour is held at its own
+                                    # setpoint: dT across the shared surface is
+                                    # ~0, so the exchange is negligible rather
+                                    # than the large phantom flow the buffer
+                                    # model produces. Falling back to this zone's
+                                    # own previous operative temperature when no
+                                    # setpoint is declared gives dT = 0 exactly.
+                                    theta_ztu[Tstepi] = (setpoint if setpoint is not None
+                                                         else theta_int_prev)
+                                else:
+                                    theta_ztu[Tstepi] = _theta_ztu_unconditioned(
+                                        theta_int_prev, T2m_arr[Tstepi], b_ztu,
+                                        phi_gn_dir_ztu, H_ztu, c_ztu_h_max,
+                                    )
                             
                             # Multiple zones
                             elif list_adj_zones > 1:
                                 for z in range(list_adj_zones):
                                     zone = building_object['adjacent_zones'][z]
-                                    H_ztu = H_ztu_zones_df.loc['H_ztu'][zone['name']]
-                                    theta_ztu_t = (Theta_int_op[Tstepi-1,0] - b_ztu*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]) + (phi_gn_dir_ztu/H_ztu))
-                                    theta_ztu_t_checked = min(T2m_arr[Tstepi] + c_ztu_h_max*(Theta_int_op[Tstepi-1,0] - T2m_arr[Tstepi]), theta_ztu_t)
-                                    theta_ztu[Tstepi,z] = theta_ztu_t_checked
-                        theta_ztu_df = pd.DataFrame(theta_ztu, columns=H_ztu_zones_df.columns.tolist())
+                                    conditioned, setpoint = (adj_conditioning[z]
+                                                             if z < len(adj_conditioning)
+                                                             else (False, None))
+                                    if conditioned:
+                                        theta_ztu[Tstepi,z] = (setpoint if setpoint is not None
+                                                               else theta_int_prev)
+                                        continue
+                                    # b_ztu is read per zone here. It used to be
+                                    # whichever scalar the coefficient loop above
+                                    # left in scope -- the LAST adjacent zone's --
+                                    # applied to all of them, so reordering the
+                                    # dictionary changed the result.
+                                    H_ztu_z = H_ztu_zones_df.loc['H_ztu'][zone['name']]
+                                    b_ztu_z = H_ztu_zones_df.loc['b_ztu'][zone['name']]
+                                    theta_ztu[Tstepi,z] = _theta_ztu_unconditioned(
+                                        theta_int_prev, T2m_arr[Tstepi], b_ztu_z,
+                                        phi_gn_dir_ztu, H_ztu_z, c_ztu_h_max,
+                                    )
+                        # H_ztu_zones_df only exists for the multi-zone path; the
+                        # single-zone path used to reach this line and raise
+                        # NameError. Guarded rather than fixed as physics.
+                        if list_adj_zones > 1:
+                            theta_ztu_df = pd.DataFrame(theta_ztu, columns=H_ztu_zones_df.columns.tolist())
 
                     for Eli in range(bui_eln):
                         n_nodes = nodes.Pln[Eli]

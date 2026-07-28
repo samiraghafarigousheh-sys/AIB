@@ -125,6 +125,13 @@ def check_heating_system_inputs(system_input: dict):
 
 
 
+# Plausible indoor setpoint band for a conditioned adjacent zone [degC]. Wide on
+# purpose: this only raises a WARN, and the point is to catch a unit slip or a
+# stray sentinel, not to police a design choice.
+ADJ_SETPOINT_MIN_C = 5.0
+ADJ_SETPOINT_MAX_C = 35.0
+
+
 def sanitize_and_validate_BUI(bui: dict,
                               fix: bool = True,
                               eps: float = 1e-6,
@@ -322,6 +329,47 @@ def sanitize_and_validate_BUI(bui: dict,
                     add_issue("WARN", f"{path}.transmittance_U_elements", f"U<=0 at idx {bad}; set to {D['opaque_u_default']}", fixed=True)
                 else:
                     add_issue("ERROR", f"{path}.transmittance_U_elements", f"U<=0 ai idx {bad}", fixed=False)
+
+        # conditioned / setpoint (optional; default: unconditioned buffer)
+        #
+        # A zone marked conditioned is held at its setpoint instead of being run
+        # through the ISO 13789 buffer formula, so a wrong value here moves
+        # transmission through every shared surface. Both fields are validated,
+        # neither is required, and absence reproduces the previous behaviour.
+        conditioned = az.get("conditioned", None)
+        if conditioned is not None and not isinstance(conditioned, (bool, np.bool_)):
+            if fix:
+                az["conditioned"] = bool(conditioned)
+                add_issue("WARN", f"{path}.conditioned",
+                          f"conditioned should be a bool; coerced {conditioned!r} -> {bool(conditioned)}",
+                          fixed=True)
+            else:
+                add_issue("ERROR", f"{path}.conditioned",
+                          f"conditioned should be a bool; value={conditioned!r}", fixed=False)
+
+        setpoint = az.get("setpoint", None)
+        if setpoint is not None:
+            ok = isinstance(setpoint, (int, float)) and not isinstance(setpoint, bool) \
+                and np.isfinite(float(setpoint))
+            if not ok:
+                add_issue("ERROR", f"{path}.setpoint",
+                          f"setpoint should be a finite number [degC]; value={setpoint!r}",
+                          fixed=False)
+            elif not (ADJ_SETPOINT_MIN_C <= float(setpoint) <= ADJ_SETPOINT_MAX_C):
+                # Module constants, not D: `defaults` is caller-replaceable in
+                # full, so a caller passing their own dict would KeyError here.
+                add_issue("WARN", f"{path}.setpoint",
+                          f"setpoint={setpoint} degC is outside the plausible indoor range "
+                          f"[{ADJ_SETPOINT_MIN_C}, {ADJ_SETPOINT_MAX_C}]", fixed=False)
+
+        if bool(az.get("conditioned", False)) and setpoint is None:
+            # Not an error: the engine falls back to the zone's own previous
+            # operative temperature, which is dT = 0 across the shared surface.
+            # Worth saying out loud, because "conditioned to what?" is exactly
+            # the question a reviewer should be asking.
+            add_issue("WARN", f"{path}.setpoint",
+                      "conditioned=True without a setpoint; the adjacent zone will track "
+                      "this zone's own operative temperature (dT = 0)", fixed=False)
     
     # -------------------------------------------------------------------
     # 4) ADJACENCY PAIRING CAPS + FINESTRE + SPLIT ESTERNO
