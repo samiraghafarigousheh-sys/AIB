@@ -784,6 +784,50 @@ def _has_ventilation_components(building_object) -> bool:
     return isinstance(components, list) and len(components) > 0
 
 
+COLDEST_MONTH_NORTHERN = 1   # January
+COLDEST_MONTH_SOUTHERN = 7   # July
+
+
+def _resolve_coldest_month(building_object) -> int:
+    """
+    Coldest month (1-12) for the ISO 13370 ground sinusoids.
+
+    An explicit ``building_parameters.coldest_month`` wins, so a site with a
+    known local minimum can override the default. Otherwise it follows the
+    hemisphere: **July** below the equator, **January** above it. This is what
+    ``Temp_calculation_of_ground``'s own docstring has always specified; the
+    code hardcoded January, which is six months out of phase for every southern
+    site.
+
+    Latitude is read from the building dictionary. If it is missing or unusable
+    the northern default is kept -- deliberately, because that is the previous
+    behaviour, and silently flipping a building's ground phase on the strength
+    of an absent input would be worse than leaving it alone. Callers that care
+    should supply ``building.latitude``.
+    """
+    if not isinstance(building_object, dict):
+        return COLDEST_MONTH_NORTHERN
+
+    explicit = (building_object.get("building_parameters", {}) or {}).get("coldest_month", None)
+    if explicit is not None:
+        try:
+            month = int(explicit)
+        except (TypeError, ValueError):
+            month = None
+        if month is not None and 1 <= month <= 12:
+            return month
+
+    latitude = (building_object.get("building", {}) or {}).get("latitude", None)
+    try:
+        latitude = float(latitude)
+    except (TypeError, ValueError):
+        return COLDEST_MONTH_NORTHERN
+    if not np.isfinite(latitude):
+        return COLDEST_MONTH_NORTHERN
+
+    return COLDEST_MONTH_SOUTHERN if latitude < 0.0 else COLDEST_MONTH_NORTHERN
+
+
 DEFAULT_THETA_ZTU_INIT_C = 15.0
 
 
@@ -3813,7 +3857,19 @@ class ISO52016:
 
         # ============================
 
-        coldest_month = 1
+        # Coldest month drives the phase of every ground sinusoid below: the
+        # internal-temperature estimate here, and the two periodic ground-
+        # temperature terms further down. It was hardcoded to January, which is
+        # six months out of phase for any southern-hemisphere site -- the model
+        # would put peak ground temperature in July for Melbourne.
+        #
+        # The docstring already promised hemisphere selection ("the default
+        # values: 1 for northern hemisphere or 7 in southern hemisphere are
+        # used"); only the code disagreed.
+        #
+        # An explicit building_parameters.coldest_month still wins, so a site
+        # with a known local minimum can override the hemisphere default.
+        coldest_month = _resolve_coldest_month(building_object)
         building_object["building_parameters"]["coldest_month"] = coldest_month
 
         internal_temperature_by_month = np.zeros(12)
