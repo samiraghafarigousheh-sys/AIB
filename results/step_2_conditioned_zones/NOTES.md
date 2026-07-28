@@ -7,11 +7,16 @@ Weather `AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw`.
 
 apt 305's five party surfaces were declared `type: "opaque"` with a
 `name_adj_zone`. The engine classifies a surface as ADJ **purely from `type`** —
-a `name_adj_zone` on an `"opaque"` surface is silently ignored. So all five party
-surfaces were being modelled as **exterior walls exposed to outdoor air and
-sky**: the apartment was effectively outdoors on six sides, `theta_ztu` was
+a `name_adj_zone` on an `"opaque"` surface is silently ignored. `theta_ztu` was
 computed every timestep and never consumed, and the adjacency pairing checks in
 `check_input.py` (which key off the same `type`) never ran either.
+
+What those five surfaces *were* classified as is worse than "exterior". The core
+maps `type == "opaque"` with `sky_view_factor == 0` to **`GR` — slab-on-ground**.
+All five party surfaces, including the **ceiling**, were modelled as being in
+direct contact with the earth: 75.1 m² of buried envelope on a third-floor
+apartment. That is also where the pre-step-3 ground-contact area of 75.1 m²
+came from.
 
 Measured directly before touching anything: marking the neighbours conditioned
 changed heating and cooling by **exactly zero** (bit-identical to 12 s.f.),
@@ -28,8 +33,8 @@ untouched. Every column in the comparison therefore shifts, including Baseline:
 | Baseline, party surfaces typed `adjacent` | 1 308.58 | 741.83 |
 
 Any earlier figure from this repo — the EnergyPlus comparison, the window
-branches, the ventilation/latent table — is for a free-standing 20 m² box, not
-an apartment inside a block. That includes the EnergyPlus alignment audit's
+branches, the ventilation/latent table — is for a 20 m² box with 75 m² of
+slab-on-ground, not an apartment inside a block. That includes the EnergyPlus alignment audit's
 claim that the ISO side models neighbours as ISO 13789 buffers: on the ISO side
 it never did. The E+ side *did* get OSC objects built from `b_ztu`, so that
 comparison was mismatched in a way the audit did not detect.

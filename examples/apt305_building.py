@@ -15,12 +15,15 @@ SURFACE TYPING
 The five party surfaces carry ``type: "adjacent"``, not ``"opaque"``. This is
 load-bearing, not cosmetic: the engine classifies a surface as ADJ purely from
 ``type``, and a ``name_adj_zone`` on an ``"opaque"`` surface is silently
-ignored. Typed ``"opaque"``, all five were modelled as **exterior walls exposed
-to outdoor air and sky** — the apartment was effectively outdoors on six sides,
-``theta_ztu`` was computed every timestep and never consumed, and the adjacency
-pairing checks in ``check_input.py`` (which also key off ``type == "adjacent"``)
-never ran either. Any figure produced before this was corrected is for a
-free-standing 20 m² box, not an apartment inside a block.
+ignored: ``theta_ztu`` was computed every timestep and never consumed, and the
+adjacency pairing checks in ``check_input.py`` (which also key off
+``type == "adjacent"``) never ran either.
+
+Worse, the core maps ``type == "opaque"`` with ``sky_view_factor == 0`` to
+**GR — slab-on-ground**. Typed ``"opaque"``, all five party surfaces *including
+the ceiling* were modelled as buried in the earth, giving this third-floor
+apartment 75.1 m² of ground contact. Any figure produced before this was
+corrected is for a 20 m² box with 75 m² of slab-on-ground.
 
 Only the *type* changed. Areas, U-values, capacities, orientations and the
 adjacent-zone definitions are untouched.
