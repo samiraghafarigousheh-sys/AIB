@@ -1,10 +1,10 @@
 | Metric | Unit | Baseline | +Vent+Latent | +Internal Gains |
 |---|---|---|---|---|
-| Heating | kWh | 15.86 | 37.34 | 1,274.56 |
-| Cooling | kWh | 2,027.51 | 1,727.18 | 699.85 |
+| Heating | kWh | 1,308.60 | 1,522.61 | 3,228.23 |
+| Cooling | kWh | 741.83 | 646.25 | 308.30 |
 | Total internal gains | kWh | 5,356.69 | 5,356.69 | 730.29 |
-| Ground loss | kWh | 192.44 | 175.56 | 139.04 |
-| Ground gain | kWh | 42.43 | 47.24 | 74.57 |
-| Ventilation+infiltration loss | kWh | 2,829.27 | 3,235.42 | 1,846.06 |
-| Total energy need | kWh | 3,775.59 | 2,070.83 | 2,615.90 |
-| Total energy need | kWh/m2 | 188.78 | 103.54 | 130.79 |
+| Ground loss | kWh | 90.20 | 84.70 | 63.12 |
+| Ground gain | kWh | 2.77 | 3.28 | 7.80 |
+| Ventilation+infiltration loss | kWh | 1,868.48 | 2,377.31 | 1,796.62 |
+| Total energy need | kWh | 3,457.16 | 2,573.53 | 4,207.23 |
+| Total energy need | kWh/m2 | 172.86 | 128.68 | 210.36 |

@@ -23,34 +23,42 @@ transfer.
 
 ## Expected direction, and whether it matched
 
+> **Numbers regenerated after the step-2 surface-typing correction.** apt 305's
+> five party surfaces were typed `"opaque"`, so they were modelled as exterior
+> walls; they are now typed `"adjacent"`. See
+> `results/step_2_conditioned_zones/NOTES.md`. That shifts every column here,
+> but not this step's finding — the internal-gains ratio is identical either
+> way, because the removed term never depended on the surfaces.
+
 | Metric | Expected | Actual | Match |
 | --- | --- | --- | :-: |
 | Total internal gains | ÷7.335 exactly | 5 356.7 → 730.3 kWh (÷**7.335**) | ✅ |
-| Heating | large increase — the phantom gains were free heat | 37.3 → 1 274.6 kWh | ✅ |
-| Cooling | large decrease — less heat to reject | 1 727.2 → 699.8 kWh (−59.5 %) | ✅ |
-| Ventilation+infiltration loss | decrease — cooler zone, smaller ΔT | 3 235.4 → 1 846.1 kWh (−42.9 %) | ✅ |
-| Ground loss / gain | small second-order shift only | 175.6 → 139.0 / 47.2 → 74.6 kWh | ✅ |
-| Total energy need | direction not predictable a priori | 2 070.8 → 2 615.9 kWh (+26.3 %) | — |
+| Heating | large increase — the phantom gains were free heat | 1 522.6 → 3 228.2 kWh (+112 %) | ✅ |
+| Cooling | large decrease — less heat to reject | 646.3 → 308.3 kWh (−52.3 %) | ✅ |
+| Ventilation+infiltration loss | decrease — cooler zone, smaller ΔT | 2 377.3 → 1 796.6 kWh (−24.4 %) | ✅ |
+| Ground loss / gain | small second-order shift only | 84.7 → 63.1 / 3.3 → 7.8 kWh | ✅ |
+| Total energy need | direction not predictable a priori | 2 573.5 → 4 207.2 kWh (+63.5 %) | — |
 
 The ÷7.335 is the load-bearing check: it is the analytically predicted factor,
-reproduced to three decimals by the engine, so the effect is exactly the removed
-term and nothing else. 730.3 kWh/yr for a 20 m² apartment at a 144 W full-load
-table value implies a ~58 % mean profile load, which is sensible for residential
-occupancy.
+reproduced to four significant figures by the engine, so the effect is exactly
+the removed term and nothing else. 730.3 kWh/yr for a 20 m² apartment at a 144 W
+full-load table value implies a ~58 % mean profile load, which is sensible for
+residential occupancy.
 
 Total energy need rising is not a regression: heating gains far more than
 cooling loses, because the removed phantom gain was warming a zone whose
 neighbours are (still, at this step) modelled as unconditioned buffers tracking
-outdoor air. Step 2 addresses that.
+outdoor air. Step 2 addresses that, and takes the total from 210.4 to
+34.9 kWh/m².
 
 ## Flags
 
-- **63.7 kWh/m² heating is high for a 20 m² Melbourne apartment** with one
-  exposed facade. Not treated as a failure of this step — the five neighbours
-  are still ISO 13789 unconditioned buffers with `b_ztu` 0.73–0.93, i.e. they
-  mostly track outdoor air, so the apartment is effectively surrounded by
-  outside on six sides. Step 2 is the test of that reading: if heating does not
-  fall sharply there, something else is wrong.
+- **161 kWh/m² heating is far too high for a 20 m² Melbourne apartment** with
+  one exposed facade. Not a failure of this step — the five neighbours are
+  still ISO 13789 unconditioned buffers with `b_ztu` 0.73–0.93, so they mostly
+  track outdoor air and the apartment is effectively surrounded by outside on
+  six sides. Step 2 was the test of that reading, and it held: heating falls to
+  123.4 kWh (6.2 kWh/m²) once the neighbours are conditioned.
 - **`b_ztu` is still applied per-building, not per-zone**, at
   `utils.py:8080` / `utils.py:9703` — the `theta_ztu` loop indexes `H_ztu` per
   zone but reuses the scalar `b_ztu` left over from the coefficient loop.

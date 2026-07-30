@@ -43,5 +43,20 @@
     "Q_H_latent_annual_kWh": 0.06623027097311734,
     "Q_H_annual_kWh_m2": 161.4113151883013,
     "Q_C_annual_kWh_m2": 15.415131920487838
+  },
+  "+Conditioned Zones": {
+    "net_floor_area_m2": 20.0,
+    "Q_H_annual_kWh": 123.38774002887686,
+    "Q_C_annual_kWh": 20.06029248904007,
+    "Q_internal_gains_kWh": 730.2912,
+    "Q_ground_loss_kWh": 68.80682736524726,
+    "Q_ground_gain_kWh": 2.1947882160779746,
+    "Q_ve_loss_kWh": 2096.2599912338105,
+    "Q_total_annual_kWh": 697.0989042922455,
+    "Q_total_annual_kWh_m2": 34.85494521461227,
+    "Q_latent_annual_kWh": 553.6170144991595,
+    "Q_H_latent_annual_kWh": 0.03385727516895235,
+    "Q_H_annual_kWh_m2": 6.169387001443843,
+    "Q_C_annual_kWh_m2": 1.0030146244520035
   }
 }

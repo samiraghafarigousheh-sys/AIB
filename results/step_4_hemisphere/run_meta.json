@@ -1,0 +1,9 @@
+{
+  "weather_source": "epw",
+  "weather_path": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw",
+  "weather_label": "AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw \u2014 Melbourne.RO (lat -37.81, lon 144.97)",
+  "station": "Melbourne.RO",
+  "latitude": -37.8075,
+  "longitude": 144.97,
+  "site_offset_deg": 0.008
+}
