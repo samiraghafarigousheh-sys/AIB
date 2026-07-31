@@ -1,0 +1,584 @@
+{
+  "Baseline": {
+    "net_floor_area_m2": 20.0,
+    "ground_nan_repair": {
+      "applied": false,
+      "n_nonfinite": 0
+    },
+    "time_step_h": 1.0,
+    "Q_H_annual_kWh": 1308.601259174238,
+    "Q_C_annual_kWh": 741.828245796808,
+    "Q_latent_annual_kWh": 617.3827075855572,
+    "Q_internal_gains_kWh": 5356.685952,
+    "Q_solar_gains_kWh": 819.5857298352444,
+    "Q_ground_loss_kWh": 90.19910378124511,
+    "Q_ground_gain_kWh": 2.7742842910459484,
+    "Q_ve_loss_kWh": 1868.4845473364412,
+    "Q_ve_gain_kWh": 101.49494545222475,
+    "Q_tb_loss_kWh": 1.9283020185948692,
+    "Q_tr_opaque_loss_kWh": 89.04601996267229,
+    "Q_tr_window_loss_kWh": 259.6169537597116,
+    "latent_heating_kWh": 789.3514842676997,
+    "latent_cooling_kWh": 617.3827075855572,
+    "latent_vent_pos_kWh": 617.3827075855572,
+    "latent_vent_neg_kWh": 0.0,
+    "latent_internal_kWh": 0.0,
+    "latent_signed_net_kWh": -171.9687766821423,
+    "Q_total_annual_kWh": 3457.163696824303,
+    "monthly_latent_heating_kWh": [
+      100.7903743179227,
+      67.22965327464762,
+      63.585794203105394,
+      65.87478726938978,
+      20.406256954354834,
+      43.88000987253399,
+      39.45238291596965,
+      76.21148422584515,
+      76.7636453245496,
+      68.74940512745518,
+      93.90351868202022,
+      72.50417209990543
+    ],
+    "monthly_latent_cooling_kWh": [
+      50.09155850758593,
+      83.01007000559596,
+      77.74288398687307,
+      57.382389836501304,
+      64.64745062946011,
+      40.66673844739336,
+      22.708487066003727,
+      16.083510136643497,
+      27.465276624484325,
+      59.378675784288184,
+      49.31254429536436,
+      68.89312226536343
+    ],
+    "X_ext": {
+      "mean": 0.007263589846379387,
+      "min": 0.003070883931271912,
+      "max": 0.017386539844291754
+    },
+    "X_int_ref": {
+      "mean": 0.007426411967000344,
+      "min": 0.00525707380353771,
+      "max": 0.01192594739702032
+    },
+    "m_dot_vent_kg_s": {
+      "mean": 0.04820792039800995,
+      "max": 0.04820792039800995
+    },
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 1308601.2591742373,
+        "Internal gains": 5356685.952000037,
+        "Solar & free-gain": 1452293.9268424343
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 741828.2457968082,
+        "Ventilation (losses)": 1868484.5473364373,
+        "Thermal bridges": 1928.302018594871,
+        "Ground": 90199.103781245,
+        "Transmission - West exterior wall (opaque)": 89046.0199626722,
+        "Transmission - West window - fixed + West window - operable": 259616.9537597121
+      },
+      "republished_residual_Wh": 5066477.965361238,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 8117581.138016708,
+      "outputs_total_Wh": 3051103.1726554697,
+      "residual_Wh": 5066477.965361238,
+      "residual_kWh": 5066.477965361239,
+      "residual_pct": 62.413641197051014
+    },
+    "engine_printed_sankey_check": {
+      "inputs_Wh": 8117581.1,
+      "outputs_plus_storage_Wh": 3051103.2,
+      "residual_Wh": 5066478.0,
+      "residual_pct": 62.414
+    }
+  },
+  "+Vent+Latent": {
+    "net_floor_area_m2": 20.0,
+    "ground_nan_repair": {
+      "applied": false,
+      "n_nonfinite": 0
+    },
+    "time_step_h": 1.0,
+    "Q_H_annual_kWh": 1522.6086430750397,
+    "Q_C_annual_kWh": 646.2505416776471,
+    "Q_latent_annual_kWh": 404.21158662825474,
+    "Q_internal_gains_kWh": 5356.685952,
+    "Q_solar_gains_kWh": 819.5857298352444,
+    "Q_ground_loss_kWh": 84.69614077740228,
+    "Q_ground_gain_kWh": 3.275042620984636,
+    "Q_ve_loss_kWh": 2377.3070892315286,
+    "Q_ve_gain_kWh": 60.179666788722166,
+    "Q_tb_loss_kWh": 1.8124033276693003,
+    "Q_tr_opaque_loss_kWh": 80.6904397162522,
+    "Q_tr_window_loss_kWh": 248.16276119553467,
+    "latent_heating_kWh": 0.4614064052338871,
+    "latent_cooling_kWh": 404.21158662825474,
+    "latent_vent_pos_kWh": 199.23186434976634,
+    "latent_vent_neg_kWh": 0.0,
+    "latent_internal_kWh": 205.33048824444447,
+    "latent_signed_net_kWh": 403.7501802230209,
+    "Q_total_annual_kWh": 2573.5321777861755,
+    "monthly_latent_heating_kWh": [
+      0.14746689644946942,
+      0.0022941373033690303,
+      0.0,
+      0.04968007660444125,
+      0.0,
+      0.011654483458479173,
+      0.0,
+      0.007443507998053548,
+      0.012621683114192256,
+      0.020959888033973074,
+      0.2092857322719093,
+      0.0
+    ],
+    "monthly_latent_cooling_kWh": [
+      30.10708922229773,
+      46.37676215666055,
+      44.68547518434788,
+      36.21714179366275,
+      36.999552750275605,
+      28.014970385563558,
+      18.452342690505247,
+      21.525428271409254,
+      25.362203928849574,
+      40.951358902081495,
+      32.774090725816016,
+      42.74517061678514
+    ],
+    "X_ext": {
+      "mean": 0.007263589846379387,
+      "min": 0.003070883931271912,
+      "max": 0.017386539844291754
+    },
+    "X_int_ref": {
+      "mean": 0.00708832638192474,
+      "min": 0.003070883931271912,
+      "max": 0.014131262167571967
+    },
+    "m_dot_vent_kg_s": {
+      "mean": 0.05209910693404386,
+      "max": 0.055604587768988634
+    },
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 1522608.6430750398,
+        "Internal gains": 5356685.952000037,
+        "Solar & free-gain": 1428770.3190809686
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 646250.541677647,
+        "Ventilation (losses)": 2377307.089231544,
+        "Thermal bridges": 1812.4033276692953,
+        "Ground": 84696.14077740221,
+        "Transmission - West exterior wall (opaque)": 80690.43971625205,
+        "Transmission - West window - fixed + West window - operable": 248162.7611955351
+      },
+      "republished_residual_Wh": 4869145.5382299945,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 8308064.914156045,
+      "outputs_total_Wh": 3438919.3759260504,
+      "residual_Wh": 4869145.5382299945,
+      "residual_kWh": 4869.145538229995,
+      "residual_pct": 58.60745659237083
+    },
+    "engine_printed_sankey_check": {
+      "inputs_Wh": 8308064.9,
+      "outputs_plus_storage_Wh": 3438919.4,
+      "residual_Wh": 4869145.5,
+      "residual_pct": 58.607
+    }
+  },
+  "+Internal Gains": {
+    "net_floor_area_m2": 20.0,
+    "ground_nan_repair": {
+      "applied": false,
+      "n_nonfinite": 0
+    },
+    "time_step_h": 1.0,
+    "Q_H_annual_kWh": 3228.226303766026,
+    "Q_C_annual_kWh": 308.30263840975675,
+    "Q_latent_annual_kWh": 670.6304502704937,
+    "Q_internal_gains_kWh": 730.2912,
+    "Q_solar_gains_kWh": 819.5857298352444,
+    "Q_ground_loss_kWh": 63.120758718944344,
+    "Q_ground_gain_kWh": 7.800673811673229,
+    "Q_ve_loss_kWh": 1796.6172358329748,
+    "Q_ve_gain_kWh": 70.11159826797466,
+    "Q_tb_loss_kWh": 1.3494447309337128,
+    "Q_tr_opaque_loss_kWh": 220.38301568864827,
+    "Q_tr_window_loss_kWh": 195.5529132183885,
+    "latent_heating_kWh": 0.06623027097311734,
+    "latent_cooling_kWh": 670.6304502704937,
+    "latent_vent_pos_kWh": 465.43392127773745,
+    "latent_vent_neg_kWh": 0.0,
+    "latent_internal_kWh": 205.33048824444447,
+    "latent_signed_net_kWh": 670.5642199995207,
+    "Q_total_annual_kWh": 4207.225622717249,
+    "monthly_latent_heating_kWh": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.04498845055451329,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.021241820418604063,
+      0.0
+    ],
+    "monthly_latent_cooling_kWh": [
+      59.03672437404218,
+      100.47792666472222,
+      95.68546809001086,
+      64.5760475333606,
+      47.294975002808805,
+      28.4009305482402,
+      20.07969879427425,
+      21.835704827832718,
+      31.335522014219965,
+      62.47847149726714,
+      55.68198102213377,
+      83.74699990158105
+    ],
+    "X_ext": {
+      "mean": 0.007263589846379387,
+      "min": 0.003070883931271912,
+      "max": 0.017386539844291754
+    },
+    "X_int_ref": {
+      "mean": 0.0068438245310006906,
+      "min": 0.003070883931271912,
+      "max": 0.014205634099601759
+    },
+    "m_dot_vent_kg_s": {
+      "mean": 0.05169305590880517,
+      "max": 0.055535030127023884
+    },
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 3228226.3037660164,
+        "Internal gains": 730291.1999999954,
+        "Solar & free-gain": 1434229.6293523856
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 308302.63840975665,
+        "Ventilation (losses)": 1796617.235832979,
+        "Thermal bridges": 1349.444730933715,
+        "Ground": 63120.75871894425,
+        "Transmission - West exterior wall (opaque)": 220383.01568864877,
+        "Transmission - West window - fixed + West window - operable": 195552.91321838828
+      },
+      "republished_residual_Wh": 2807421.126518747,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 5392747.133118398,
+      "outputs_total_Wh": 2585326.0065996507,
+      "residual_Wh": 2807421.126518747,
+      "residual_kWh": 2807.421126518747,
+      "residual_pct": 52.0592020582158
+    },
+    "engine_printed_sankey_check": {
+      "inputs_Wh": 5392747.1,
+      "outputs_plus_storage_Wh": 2585326.0,
+      "residual_Wh": 2807421.1,
+      "residual_pct": 52.059
+    }
+  },
+  "+Conditioned Zones": {
+    "net_floor_area_m2": 20.0,
+    "ground_nan_repair": {
+      "applied": false,
+      "n_nonfinite": 0
+    },
+    "time_step_h": 1.0,
+    "Q_H_annual_kWh": 123.38774002887686,
+    "Q_C_annual_kWh": 20.06029248904007,
+    "Q_latent_annual_kWh": 553.6170144991595,
+    "Q_internal_gains_kWh": 730.2912,
+    "Q_solar_gains_kWh": 819.5857298352444,
+    "Q_ground_loss_kWh": 68.80682736524726,
+    "Q_ground_gain_kWh": 2.1947882160779746,
+    "Q_ve_loss_kWh": 2096.2599912338105,
+    "Q_ve_gain_kWh": 102.2135358868526,
+    "Q_tb_loss_kWh": 1.6216641182051763,
+    "Q_tr_opaque_loss_kWh": 333.922594647843,
+    "Q_tr_window_loss_kWh": 291.728456951752,
+    "latent_heating_kWh": 0.03385727516895235,
+    "latent_cooling_kWh": 553.6170144991595,
+    "latent_vent_pos_kWh": 348.3580547629062,
+    "latent_vent_neg_kWh": 0.0,
+    "latent_internal_kWh": 205.33048824444447,
+    "latent_signed_net_kWh": 553.5831572239904,
+    "Q_total_annual_kWh": 697.0989042922455,
+    "monthly_latent_heating_kWh": [
+      0.011961916221534962,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.021895358947417388,
+      0.0
+    ],
+    "monthly_latent_cooling_kWh": [
+      68.61115869870862,
+      97.75622880721025,
+      81.3530089325751,
+      39.28736516461175,
+      24.85448677851318,
+      20.794396508458494,
+      17.378304957236338,
+      18.274445295981945,
+      21.798145528568178,
+      43.30863228930042,
+      43.15118049035402,
+      77.0496610476412
+    ],
+    "X_ext": {
+      "mean": 0.007263589846379387,
+      "min": 0.003070883931271912,
+      "max": 0.017386539844291754
+    },
+    "X_int_ref": {
+      "mean": 0.006950301327661883,
+      "min": 0.003070883931271912,
+      "max": 0.014570445636356719
+    },
+    "m_dot_vent_kg_s": {
+      "mean": 0.05197658739385989,
+      "max": 0.0553698036025733
+    },
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 123387.74002887681,
+        "Internal gains": 730291.1999999954,
+        "Solar & free-gain": 1441799.7868039212
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 20060.292489040065,
+        "Ventilation (losses)": 2096259.99123381,
+        "Thermal bridges": 1621.6641182051726,
+        "Ground": 68806.82736524701,
+        "Transmission - West exterior wall (opaque)": 333922.5946478421,
+        "Transmission - West window - fixed + West window - operable": 291728.45695175114
+      },
+      "republished_residual_Wh": 0.0,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 2295478.7268327936,
+      "outputs_total_Wh": 2812399.826805895,
+      "residual_Wh": -516921.09997310163,
+      "residual_kWh": -516.9210999731016,
+      "residual_pct": -22.519097821757118
+    },
+    "engine_printed_sankey_check": {
+      "inputs_Wh": 2295478.7,
+      "outputs_plus_storage_Wh": 2812399.8,
+      "residual_Wh": -516921.1,
+      "residual_pct": -22.519
+    }
+  },
+  "+Ground Fix": {
+    "net_floor_area_m2": 20.0,
+    "ground_nan_repair": {
+      "applied": true,
+      "n_nonfinite": 12
+    },
+    "time_step_h": 1.0,
+    "Q_H_annual_kWh": 123.38774002887686,
+    "Q_C_annual_kWh": 20.06029248904007,
+    "Q_latent_annual_kWh": 553.6170144991595,
+    "Q_internal_gains_kWh": 730.2912,
+    "Q_solar_gains_kWh": 819.5857298352444,
+    "Q_ground_loss_kWh": 0.0,
+    "Q_ground_gain_kWh": 0.0,
+    "Q_ve_loss_kWh": 2096.2599912338105,
+    "Q_ve_gain_kWh": 102.2135358868526,
+    "Q_tb_loss_kWh": 1.6216641182051763,
+    "Q_tr_opaque_loss_kWh": 333.922594647843,
+    "Q_tr_window_loss_kWh": 291.728456951752,
+    "latent_heating_kWh": 0.03385727516895235,
+    "latent_cooling_kWh": 553.6170144991595,
+    "latent_vent_pos_kWh": 348.3580547629062,
+    "latent_vent_neg_kWh": 0.0,
+    "latent_internal_kWh": 205.33048824444447,
+    "latent_signed_net_kWh": 553.5831572239904,
+    "Q_total_annual_kWh": 697.0989042922455,
+    "monthly_latent_heating_kWh": [
+      0.011961916221534962,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.021895358947417388,
+      0.0
+    ],
+    "monthly_latent_cooling_kWh": [
+      68.61115869870862,
+      97.75622880721025,
+      81.3530089325751,
+      39.28736516461175,
+      24.85448677851318,
+      20.794396508458494,
+      17.378304957236338,
+      18.274445295981945,
+      21.798145528568178,
+      43.30863228930042,
+      43.15118049035402,
+      77.0496610476412
+    ],
+    "X_ext": {
+      "mean": 0.007263589846379387,
+      "min": 0.003070883931271912,
+      "max": 0.017386539844291754
+    },
+    "X_int_ref": {
+      "mean": 0.006950301327661883,
+      "min": 0.003070883931271912,
+      "max": 0.014570445636356719
+    },
+    "m_dot_vent_kg_s": {
+      "mean": 0.05197658739385989,
+      "max": 0.0553698036025733
+    },
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 123387.74002887681,
+        "Internal gains": 730291.1999999954,
+        "Solar & free-gain": 1439604.9985878428
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 20060.292489040065,
+        "Ventilation (losses)": 2096259.99123381,
+        "Thermal bridges": 1621.6641182051726,
+        "Ground": 0.0,
+        "Transmission - West exterior wall (opaque)": 333922.5946478421,
+        "Transmission - West window - fixed + West window - operable": 291728.45695175114
+      },
+      "republished_residual_Wh": 0.0,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 2293283.938616715,
+      "outputs_total_Wh": 2743592.9994406486,
+      "residual_Wh": -450309.0608239337,
+      "residual_kWh": -450.3090608239337,
+      "residual_pct": -19.635992440410824
+    },
+    "engine_printed_sankey_check": {
+      "inputs_Wh": 2293283.9,
+      "outputs_plus_storage_Wh": 2743593.0,
+      "residual_Wh": -450309.1,
+      "residual_pct": -19.636
+    }
+  },
+  "+Hemisphere Fix": {
+    "net_floor_area_m2": 20.0,
+    "ground_nan_repair": {
+      "applied": true,
+      "n_nonfinite": 12
+    },
+    "time_step_h": 1.0,
+    "Q_H_annual_kWh": 123.38774002887686,
+    "Q_C_annual_kWh": 20.06029248904007,
+    "Q_latent_annual_kWh": 553.6170144991595,
+    "Q_internal_gains_kWh": 730.2912,
+    "Q_solar_gains_kWh": 819.5857298352444,
+    "Q_ground_loss_kWh": 0.0,
+    "Q_ground_gain_kWh": 0.0,
+    "Q_ve_loss_kWh": 2096.2599912338105,
+    "Q_ve_gain_kWh": 102.2135358868526,
+    "Q_tb_loss_kWh": 1.6216641182051763,
+    "Q_tr_opaque_loss_kWh": 333.922594647843,
+    "Q_tr_window_loss_kWh": 291.728456951752,
+    "latent_heating_kWh": 0.03385727516895235,
+    "latent_cooling_kWh": 553.6170144991595,
+    "latent_vent_pos_kWh": 348.3580547629062,
+    "latent_vent_neg_kWh": 0.0,
+    "latent_internal_kWh": 205.33048824444447,
+    "latent_signed_net_kWh": 553.5831572239904,
+    "Q_total_annual_kWh": 697.0989042922455,
+    "monthly_latent_heating_kWh": [
+      0.011961916221534962,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.021895358947417388,
+      0.0
+    ],
+    "monthly_latent_cooling_kWh": [
+      68.61115869870862,
+      97.75622880721025,
+      81.3530089325751,
+      39.28736516461175,
+      24.85448677851318,
+      20.794396508458494,
+      17.378304957236338,
+      18.274445295981945,
+      21.798145528568178,
+      43.30863228930042,
+      43.15118049035402,
+      77.0496610476412
+    ],
+    "X_ext": {
+      "mean": 0.007263589846379387,
+      "min": 0.003070883931271912,
+      "max": 0.017386539844291754
+    },
+    "X_int_ref": {
+      "mean": 0.006950301327661883,
+      "min": 0.003070883931271912,
+      "max": 0.014570445636356719
+    },
+    "m_dot_vent_kg_s": {
+      "mean": 0.05197658739385989,
+      "max": 0.0553698036025733
+    },
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 123387.74002887681,
+        "Internal gains": 730291.1999999954,
+        "Solar & free-gain": 1439604.9985878428
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 20060.292489040065,
+        "Ventilation (losses)": 2096259.99123381,
+        "Thermal bridges": 1621.6641182051726,
+        "Ground": 0.0,
+        "Transmission - West exterior wall (opaque)": 333922.5946478421,
+        "Transmission - West window - fixed + West window - operable": 291728.45695175114
+      },
+      "republished_residual_Wh": 0.0,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 2293283.938616715,
+      "outputs_total_Wh": 2743592.9994406486,
+      "residual_Wh": -450309.0608239337,
+      "residual_kWh": -450.3090608239337,
+      "residual_pct": -19.635992440410824
+    },
+    "engine_printed_sankey_check": {
+      "inputs_Wh": 2293283.9,
+      "outputs_plus_storage_Wh": 2743593.0,
+      "residual_Wh": -450309.1,
+      "residual_pct": -19.636
+    }
+  }
+}
