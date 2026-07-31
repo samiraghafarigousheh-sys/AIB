@@ -13,6 +13,7 @@ __pycache__/
 results/*
 !results/step_*/
 !results/au_corrections_summary/
+!results/diagnostics/
 
 # Downloaded TMYs stay out of the repo, but the reference EPW is committed:
 # every harness must run on the SAME weather, and a file that has to be fetched
