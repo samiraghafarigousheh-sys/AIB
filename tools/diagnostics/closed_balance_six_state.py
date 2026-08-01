@@ -222,16 +222,43 @@ def run_worker(args) -> int:
 # Driver
 # ---------------------------------------------------------------------------
 
+# Cherry-picking needs a committer identity. A fresh clone -- a Colab runtime, a
+# CI container -- has none configured, and git fails with "Please tell me who you
+# are" rather than anything that points at the harness. Supplied per invocation
+# so the tool never depends on, and never writes to, global git config.
+GIT_IDENTITY = [
+    "-c", "user.name=aib-closed-balance-harness",
+    "-c", "user.email=harness@localhost",
+]
+
+
 def _git(*a, cwd=REPO_ROOT, check=True):
-    p = subprocess.run(["git", "-C", str(cwd), *a], capture_output=True, text=True)
+    p = subprocess.run(["git", "-C", str(cwd), *GIT_IDENTITY, *a],
+                       capture_output=True, text=True)
     if check and p.returncode != 0:
         raise RuntimeError(f"git {' '.join(a)} failed:\n{p.stderr.strip()}")
     return p
 
 
+ENGINE_PATH = "pybuildingenergy/src/"
+
+
 def closure_commits(ref: str, base: str) -> list[str]:
+    """The commits to back-port: those in ``base..ref`` that touch the engine.
+
+    Selecting by path rather than by "everything above main" matters. The
+    instrument being held constant across states *is* the engine; a commit that
+    only writes a report, a chart or this harness changes nothing an engine
+    reports, and cherry-picking it onto a branch whose ``results/`` tree does not
+    have those files yet would conflict for no gain.
+    """
     p = _git("rev-list", "--reverse", "--no-merges", f"{base}..{ref}")
-    return [ln.strip() for ln in p.stdout.splitlines() if ln.strip()]
+    out: list[str] = []
+    for sha in (ln.strip() for ln in p.stdout.splitlines() if ln.strip()):
+        files = _git("show", "--pretty=", "--name-only", sha).stdout.split()
+        if any(f.startswith(ENGINE_PATH) for f in files):
+            out.append(sha)
+    return out
 
 
 def make_worktree(branch: str, dest: Path) -> None:
@@ -272,8 +299,7 @@ def backport(dest: Path, commits: list[str]) -> list[str]:
             _git("checkout", "--ours", "--", f, cwd=dest)
             resolved.append(f)
         _git("add", "-A", cwd=dest)
-        _git("-c", "user.name=harness", "-c", "user.email=harness@local",
-             "cherry-pick", "--continue", "--no-edit", cwd=dest)
+        _git("cherry-pick", "--continue", "--no-edit", cwd=dest)
     return resolved
 
 
