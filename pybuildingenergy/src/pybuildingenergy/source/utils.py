@@ -1083,6 +1083,56 @@ def _add_need_attribution_columns(
     return hourly_results
 
 
+def _add_latent_split_annual_columns(
+    hourly_results: pd.DataFrame,
+    annual_results_dic: dict,
+    dt_h: float,
+) -> None:
+    """Report the energy need with the sensible/latent split made explicit.
+
+    A single "total energy need" number that silently folds in an ungated latent
+    term is what inflated the apt 305 headline from 143.45 kWh sensible to
+    697.10 kWh. The split is therefore published as its own set of columns --
+    sensible, latent, and the total of the two -- alongside the ungated moisture
+    balance kept for audit, so no consumer has to guess what a total contains.
+    """
+
+    def _kwh(col: str, clip_positive: bool = True) -> float:
+        if col not in hourly_results:
+            return 0.0
+        s = pd.to_numeric(hourly_results[col], errors="coerce").fillna(0.0)
+        if clip_positive:
+            s = s.clip(lower=0.0)
+        return float(s.sum() * dt_h / 1000.0)
+
+    q_h_sens = float(annual_results_dic.get("Q_H_annual_kWh", 0.0))
+    q_c_sens = float(annual_results_dic.get("Q_C_annual_kWh", 0.0))
+    q_c_lat = _kwh("Q_latent_W")
+    q_h_lat = _kwh("Q_H_latent_W")
+
+    annual_results_dic.update({
+        "Q_H_sensible_kWh": q_h_sens,
+        "Q_C_sensible_kWh": q_c_sens,
+        "Q_H_latent_kWh": q_h_lat,
+        "Q_C_latent_kWh": q_c_lat,
+        "Q_sensible_total_kWh": q_h_sens + q_c_sens,
+        "Q_latent_total_kWh": q_h_lat + q_c_lat,
+        "Q_need_total_kWh": q_h_sens + q_c_sens + q_h_lat + q_c_lat,
+        # Audit trail for the gate: the moisture balance before it was applied,
+        # and how many timesteps each plant actually ran.
+        "Q_C_latent_ungated_kWh": _kwh("Q_latent_W_ungated"),
+        "Q_H_latent_ungated_kWh": _kwh("Q_H_latent_W_ungated"),
+        "n_steps_cooling_on": float(
+            pd.to_numeric(hourly_results.get("latent_cooling_gate", 0.0), errors="coerce")
+            .fillna(0.0).sum()
+        ),
+        "n_steps_heating_on": float(
+            pd.to_numeric(hourly_results.get("latent_heating_gate", 0.0), errors="coerce")
+            .fillna(0.0).sum()
+        ),
+    })
+
+
 def _add_annual_balance_columns(
     hourly_results: pd.DataFrame,
     annual_results_dic: dict,
@@ -9519,15 +9569,57 @@ class ISO52016:
             hourly_results["Q_latent_vent_Wh"]       = np.clip(latent_arr[:, 4], 0.0, None)
             hourly_results["Q_int_latent_W"]         = latent_arr[:, 5]                        # internal latent gains (signed)
             hourly_results["Q_latent_W_signed"]      = latent_arr[:, 6]                        # total signed (vent + int)
-            hourly_results["Q_latent_W"]             = np.clip(latent_arr[:, 6], 0.0, None)   # latent cooling need
-            hourly_results["Q_latent_Wh"]            = np.clip(latent_arr[:, 7], 0.0, None)
-            hourly_results["Q_H_latent_W"]           = np.clip(-latent_arr[:, 6], 0.0, None)  # latent heating need (humidification)
-            hourly_results["Q_H_latent_Wh"]          = np.clip(-latent_arr[:, 7], 0.0, None)
+
+            # --- PLANT GATING (AIB latent-gating fix) --------------------------
+            # What the two clips below produce is a *moisture balance* of the
+            # zone: it is non-zero in essentially every hour of the year, because
+            # outdoor air is essentially never at exactly the indoor reference
+            # humidity. Booked unconditionally it charged 8757 of 8760 hours
+            # against 66 hours of actual cooling-plant operation -- 551.33 of
+            # 553.62 kWh with the plant off, and 17.34 kWh of it while the
+            # *heating* plant was running, which is not a physically coherent
+            # thing to add to a cooling need.
+            #
+            # A latent COOLING need is the moisture the cooling system has to
+            # remove, so it exists only where the system is running and
+            # dehumidification is actually demanded. Two conditions, both
+            # required:
+            #   * the cooling plant is operating   (sensible Q_C > 0), and
+            #   * the moisture balance calls for dehumidification
+            #     (signed latent > 0 -- inside the EN 16798-1 humidity band
+            #     ``_latent_heat_load_from_air_exchange`` already returns 0).
+            # Latent HEATING (humidification) is gated symmetrically on the
+            # heating plant.
+            #
+            # The ungated series is kept, as ``*_ungated``, so the moisture
+            # balance is still inspectable and this fix is auditable; it is the
+            # gated series that feeds the energy need.
+            _q_c_sens = pd.to_numeric(hourly_results["Q_C"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+            _q_h_sens = pd.to_numeric(hourly_results["Q_H"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+            _cooling_on = _q_c_sens > 0.0
+            _heating_on = _q_h_sens > 0.0
+
+            _lat_c_w  = np.clip(latent_arr[:, 6], 0.0, None)   # dehumidification demanded
+            _lat_c_wh = np.clip(latent_arr[:, 7], 0.0, None)
+            _lat_h_w  = np.clip(-latent_arr[:, 6], 0.0, None)  # humidification demanded
+            _lat_h_wh = np.clip(-latent_arr[:, 7], 0.0, None)
+
+            hourly_results["Q_latent_W_ungated"]     = _lat_c_w
+            hourly_results["Q_H_latent_W_ungated"]   = _lat_h_w
+            hourly_results["latent_cooling_gate"]    = _cooling_on.astype(float)
+            hourly_results["latent_heating_gate"]    = _heating_on.astype(float)
+
+            hourly_results["Q_latent_W"]             = np.where(_cooling_on, _lat_c_w,  0.0)  # latent cooling need
+            hourly_results["Q_latent_Wh"]            = np.where(_cooling_on, _lat_c_wh, 0.0)
+            hourly_results["Q_H_latent_W"]           = np.where(_heating_on, _lat_h_w,  0.0)  # latent heating need
+            hourly_results["Q_H_latent_Wh"]          = np.where(_heating_on, _lat_h_wh, 0.0)
         else:
             for _col in ("X_ext_kg_kg_da", "X_int_ref_kg_kg_da", "m_dot_vent_kg_s",
                          "Q_latent_vent_W", "Q_latent_vent_Wh", "Q_int_latent_W",
                          "Q_latent_W_signed", "Q_latent_W", "Q_latent_Wh",
-                         "Q_H_latent_W", "Q_H_latent_Wh"):
+                         "Q_H_latent_W", "Q_H_latent_Wh",
+                         "Q_latent_W_ungated", "Q_H_latent_W_ungated",
+                         "latent_cooling_gate", "latent_heating_gate"):
                 hourly_results[_col] = 0.0
 
         hourly_results["Q_C_sensible"] = hourly_results["Q_C"]
@@ -9554,6 +9646,7 @@ class ISO52016:
             "Q_latent_annual_kWh_per_sqm": (Q_latent_annual / 1000.0 / A_use) if A_use > 0 else 0.0,
             "time_step_h": dt_h_annual,
         }
+        _add_latent_split_annual_columns(hourly_results, annual_results_dic, dt_h_annual)
         _add_annual_balance_columns(hourly_results, annual_results_dic, A_use, dt_h_annual)
         annual_results_df = pd.DataFrame([annual_results_dic])
 
@@ -11437,6 +11530,9 @@ class ISO52016:
             "Q_C_annual_kWh_per_sqm": (Q_C_annual / 1000.0 / A_use) if A_use > 0 else 0.0,
             "time_step_h": dt_h_annual,
         }
+        # This core carries no latent post-processing, so the split reports the
+        # sensible need with latent at zero -- same annual schema either way.
+        _add_latent_split_annual_columns(hourly_results, annual_results_dic, dt_h_annual)
         _add_annual_balance_columns(hourly_results, annual_results_dic, A_use, dt_h_annual)
         annual_results_df = pd.DataFrame([annual_results_dic])
 
