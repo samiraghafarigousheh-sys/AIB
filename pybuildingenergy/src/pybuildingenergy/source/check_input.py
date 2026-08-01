@@ -336,6 +336,46 @@ def sanitize_and_validate_BUI(bui: dict,
         )
 
     # ---------------------------
+    # 2c) ZERO SKY-VIEW SURFACES MUST DECLARE WHAT THEY FACE
+    # ---------------------------
+    #
+    # A zero sky-view factor means "not exposed to sky". The engine used to read
+    # that as "in contact with the ground" for any opaque surface, which is how a
+    # third-floor apartment ended up with 75.10 m2 of slab -- ceiling included --
+    # and an annual heating demand of 15.86 kWh. That inference is gone; a
+    # surface is ground-coupled only when tagged `boundary: "GROUND"`.
+    #
+    # The tag being required makes the *undeclared* case the one worth flagging.
+    # svf == 0 with neither a ground boundary nor an adjacent zone is genuinely
+    # ambiguous -- it could be a slab, a party wall or a shaded facade, and only
+    # the author knows which -- so warn rather than pick one silently. It is
+    # modelled as opaque-to-outdoor-air in the meantime, which is the assumption
+    # that shows up in the results if it is wrong.
+    for i, s in enumerate(bui_clean.get("building_surface", []) or []):
+        if not isinstance(s, dict):
+            continue
+        try:
+            svf = float(s.get("sky_view_factor", 1.0))
+        except (TypeError, ValueError):
+            continue
+        if abs(svf) > 1e-9:
+            continue
+        stype = str(s.get("type", "") or "").strip().lower()
+        boundary = str(s.get("boundary", "") or "").strip().upper()
+        if stype in ("adjacent", "adiabatic") or boundary in ("GROUND", "ADIABATIC", "INTERNAL"):
+            continue
+        if s.get("name_adj_zone"):
+            continue
+        add_issue(
+            "WARN", f"building_surface[{i}].sky_view_factor",
+            f"surface {s.get('name', i)!r} has sky_view_factor=0 but declares neither "
+            f'boundary="GROUND" nor an adjacent zone. A zero sky-view factor does not '
+            f"imply ground contact -- it is equally true of any partition, floor or "
+            f"ceiling. Declare which it is; it is being modelled as opaque to outdoor "
+            f"air.", fixed=False,
+        )
+
+    # ---------------------------
     # 3) ADJACENT ZONES CHECKS
     # ---------------------------
     for j, az in enumerate(bui_clean.get("adjacent_zones", [])):

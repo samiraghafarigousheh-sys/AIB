@@ -1,5 +1,10 @@
 # Item 3 — V2 Sankey closure residual, all six states
 
+> **Superseded as a result, kept as the diagnosis.** The defect this document
+> identifies has been fixed. For the closed-balance numbers — every state under
+> the 5 % gate — see `results/au_corrections_closed/`. The residuals below are
+> the *before* measurement and should not be quoted as current.
+
 **Result: every state fails the 5 % V2 tolerance, including after Step 3.** The
 ground-contact fix does exactly what it claims and nothing more — it removes a
 66.6 kWh phantom ground term — but the balance is short by 450–5 066 kWh, so

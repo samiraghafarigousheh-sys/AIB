@@ -13,6 +13,7 @@ __pycache__/
 results/*
 !results/step_*/
 !results/au_corrections_summary/
+!results/au_corrections_closed/
 !results/diagnostics/
 
 # Downloaded TMYs stay out of the repo, but the reference EPW is committed:

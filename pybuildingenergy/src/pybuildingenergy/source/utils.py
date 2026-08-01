@@ -1083,6 +1083,104 @@ def _add_need_attribution_columns(
     return hourly_results
 
 
+def _classify_iso52016_element(surf: dict) -> str:
+    """Map one surface dictionary onto its ISO 52016-1 element class.
+
+    Returns one of ``"GR"`` (ground contact), ``"AD"`` (adiabatic), ``"W"``
+    (transparent), ``"ADJ"`` (partition to another zone) or ``"OP"`` (opaque to
+    outdoor air).
+
+    WHY THIS IS NOT THE OLD RULE
+    ----------------------------
+    The rule this replaces was ``type == "opaque" and sky_view_factor == 0 ->
+    GR``. A zero sky-view factor means "not exposed to sky". That is true of
+    *any* internal partition, floor or ceiling, and says nothing whatever about
+    ground contact. On apt 305 -- a third-floor apartment -- it buried all five
+    party surfaces, **including the ceiling**, as slab-on-ground: 75.10 m2 of
+    phantom slab clamped near the ISO 13370 ground temperature, collapsing
+    annual heating to 15.86 kWh and inflating cooling to 2 027.5 kWh. That was
+    the whole of the config-A / config-B contradiction, and it turned on one
+    field of the building dictionary.
+
+    A surface is ground-coupled only when it is *declared* to be, via an
+    explicit ``boundary == "GROUND"`` (consistent with ``_ground_contact_area``,
+    which already trusts that tag and the resulting ``GR`` type and nothing
+    else). Zero sky-view alone never routes a surface to GR.
+
+    A zero-sky-view surface that names an adjacent zone is a partition, ``ADJ``.
+    One that is neither ground nor adjacent is genuinely ambiguous -- the user
+    has to say which -- so it stays ``OP`` and the validator raises a warning
+    rather than silently burying it in the earth.
+    """
+    stype = str(surf.get("type", "") or "").strip().lower()
+    boundary = str(surf.get("boundary", "") or "").strip().upper()
+
+    if boundary == "GROUND":
+        return "GR"
+    if boundary == "ADIABATIC" or stype == "adiabatic":
+        return "AD"
+    if boundary == "INTERNAL" or stype == "adjacent":
+        return "ADJ"
+    if stype == "transparent":
+        return "W"
+    # Opaque, no explicit boundary: a named adjacent zone still makes it a
+    # partition. This is what the old rule ignored -- a ``name_adj_zone`` on an
+    # ``"opaque"`` surface was silently dropped.
+    if surf.get("name_adj_zone"):
+        return "ADJ"
+    return "OP"
+
+
+def _add_latent_split_annual_columns(
+    hourly_results: pd.DataFrame,
+    annual_results_dic: dict,
+    dt_h: float,
+) -> None:
+    """Report the energy need with the sensible/latent split made explicit.
+
+    A single "total energy need" number that silently folds in an ungated latent
+    term is what inflated the apt 305 headline from 143.45 kWh sensible to
+    697.10 kWh. The split is therefore published as its own set of columns --
+    sensible, latent, and the total of the two -- alongside the ungated moisture
+    balance kept for audit, so no consumer has to guess what a total contains.
+    """
+
+    def _kwh(col: str, clip_positive: bool = True) -> float:
+        if col not in hourly_results:
+            return 0.0
+        s = pd.to_numeric(hourly_results[col], errors="coerce").fillna(0.0)
+        if clip_positive:
+            s = s.clip(lower=0.0)
+        return float(s.sum() * dt_h / 1000.0)
+
+    q_h_sens = float(annual_results_dic.get("Q_H_annual_kWh", 0.0))
+    q_c_sens = float(annual_results_dic.get("Q_C_annual_kWh", 0.0))
+    q_c_lat = _kwh("Q_latent_W")
+    q_h_lat = _kwh("Q_H_latent_W")
+
+    annual_results_dic.update({
+        "Q_H_sensible_kWh": q_h_sens,
+        "Q_C_sensible_kWh": q_c_sens,
+        "Q_H_latent_kWh": q_h_lat,
+        "Q_C_latent_kWh": q_c_lat,
+        "Q_sensible_total_kWh": q_h_sens + q_c_sens,
+        "Q_latent_total_kWh": q_h_lat + q_c_lat,
+        "Q_need_total_kWh": q_h_sens + q_c_sens + q_h_lat + q_c_lat,
+        # Audit trail for the gate: the moisture balance before it was applied,
+        # and how many timesteps each plant actually ran.
+        "Q_C_latent_ungated_kWh": _kwh("Q_latent_W_ungated"),
+        "Q_H_latent_ungated_kWh": _kwh("Q_H_latent_W_ungated"),
+        "n_steps_cooling_on": float(
+            pd.to_numeric(hourly_results.get("latent_cooling_gate", 0.0), errors="coerce")
+            .fillna(0.0).sum()
+        ),
+        "n_steps_heating_on": float(
+            pd.to_numeric(hourly_results.get("latent_heating_gate", 0.0), errors="coerce")
+            .fillna(0.0).sum()
+        ),
+    })
+
+
 def _add_annual_balance_columns(
     hourly_results: pd.DataFrame,
     annual_results_dic: dict,
@@ -1095,6 +1193,7 @@ def _add_annual_balance_columns(
         "Q_tr_total": ("Q_tr_total_loss_kWh", "Q_tr_total_gain_kWh"),
         "Q_tr_opaque": ("Q_tr_opaque_loss_kWh", "Q_tr_opaque_gain_kWh"),
         "Q_tr_window": ("Q_tr_window_loss_kWh", "Q_tr_window_gain_kWh"),
+        "Q_tr_adjacent": ("Q_tr_adjacent_loss_kWh", "Q_tr_adjacent_gain_kWh"),
         "Q_tb": ("Q_tb_loss_kWh", "Q_tb_gain_kWh"),
         "Q_ground": ("Q_ground_loss_kWh", "Q_ground_gain_kWh"),
         "Q_ve": ("Q_ve_loss_kWh", "Q_ve_gain_kWh"),
@@ -4565,7 +4664,14 @@ class ISO52016:
             bnd = str(s.get("boundary", "OUTDOORS")).upper()
             zone = s.get("zone", None)
             adjacent_zone = s.get("adjacent_zone", None)
-            key = (tstr, ostr, s["type"], bnd, zone, adjacent_zone)
+            # ``name_adj_zone`` belongs in the key. It is the field the example
+            # dictionaries actually populate (``adjacent_zone`` is usually None),
+            # so without it two party surfaces facing *different* neighbours --
+            # a floor over apt 205 and a ceiling under apt 405, both HOR, both
+            # ADJ -- collapse into one element that then carries whichever
+            # neighbour's boundary temperature happened to be seen first.
+            key = (tstr, ostr, s["type"], bnd, zone, adjacent_zone,
+                   s.get("name_adj_zone", None))
 
             A = float(s.get("area", 0.0))
             U = float(s.get("u_value", 0.0))
@@ -5311,17 +5417,9 @@ class ISO52016:
         # Keep compatibility with existing helper methods:
         # OP/W for outdoors, GR for ground, AD for adiabatic, ADJ for internal partition
         for surf in surfaces:
-            bnd = surf.get("boundary", "OUTDOORS").upper()
-            if bnd == "GROUND":
-                surf["ISO52016_type_string"] = "GR"
-            elif bnd == "ADIABATIC":
-                surf["ISO52016_type_string"] = "AD"
-            elif bnd == "INTERNAL":
-                surf["ISO52016_type_string"] = "ADJ"
-            else:
-                surf["ISO52016_type_string"] = (
-                    "W" if surf.get("type", "").lower() == "transparent" else "OP"
-                )
+            # One classifier for every entry point, so the single-zone core and
+            # the multizone paths cannot disagree about what a surface is.
+            surf["ISO52016_type_string"] = _classify_iso52016_element(surf)
 
         def _orientation_string(surf):
             ori_existing = str(surf.get("ISO52016_orientation_string", "")).upper()
@@ -6913,17 +7011,9 @@ class ISO52016:
         surfaces = building_object["building_surface"]
         Nsurf = len(surfaces)
         for surf in surfaces:
-            bnd = surf.get("boundary", "OUTDOORS").upper()
-            if bnd == "GROUND":
-                surf["ISO52016_type_string"] = "GR"
-            elif bnd == "ADIABATIC":
-                surf["ISO52016_type_string"] = "AD"
-            elif bnd == "INTERNAL":
-                surf["ISO52016_type_string"] = "ADJ"
-            else:
-                surf["ISO52016_type_string"] = (
-                    "W" if surf.get("type", "").lower() == "transparent" else "OP"
-                )
+            # One classifier for every entry point, so the single-zone core and
+            # the multizone paths cannot disagree about what a surface is.
+            surf["ISO52016_type_string"] = _classify_iso52016_element(surf)
 
         def _orientation_string(surf):
             ori_existing = str(surf.get("ISO52016_orientation_string", "")).upper()
@@ -7868,17 +7958,7 @@ class ISO52016:
             # Element types and orientations
             typology_elements = np.array(bui_eln * ["EXT"], dtype="object")
             for i, surf in enumerate(building_object["building_surface"]):
-                if surf["type"] == "opaque":
-                    if surf["sky_view_factor"] == 0:
-                        typology_elements[i] = "GR"
-                    else:
-                        typology_elements[i] = "OP"
-                elif surf["type"] == "adiabatic":
-                    typology_elements[i] = "AD"
-                elif surf["type"] == "transparent":
-                    typology_elements[i] = "W"
-                elif surf["type"] == "adjacent":
-                    typology_elements[i] = "ADJ"
+                typology_elements[i] = _classify_iso52016_element(surf)
                 surf["ISO52016_type_string"] = typology_elements[i]
 
             Type_eli = bui_eln * ["EXT"]
@@ -7959,6 +8039,14 @@ class ISO52016:
 
             # 3) Reconstruct helpers after aggregation
             bui_eln = len(building_object["building_surface"])
+            # ``name_adjacent_zones`` was built from the PRE-aggregation surface
+            # list and then indexed with post-aggregation ``Eli``. Any collapse
+            # shifts the indices, so the ADJ boundary temperature could be read
+            # from the wrong neighbour. Rebuild it against the list the solver
+            # actually iterates.
+            name_adjacent_zones = [
+                surface.get("name_adj_zone") for surface in building_object["building_surface"]
+            ]
             typology_elements = np.array([s["ISO52016_type_string"] for s in building_object["building_surface"]], dtype=object)
             Type_eli = ["EXT" if t not in ("GR", "ADJ", "AD") else t for t in typology_elements]
             orientation_elements = np.array([s["ISO52016_orientation_string"] for s in building_object["building_surface"]], dtype=object)
@@ -8284,6 +8372,7 @@ class ISO52016:
         E_vent_loss_Wh = 0.0
         E_tb_loss_Wh = 0.0
         E_ground_loss_Wh = 0.0
+        E_solar_env_Wh = 0.0   # short-wave absorbed on the outer face of the envelope
         E_storage_Wh = 0.0
         E_latent_Wh = 0.0
 
@@ -8303,16 +8392,25 @@ class ISO52016:
         # Previous state for storage (degC): initialized ONCE
         Theta_prev_state = np.full(nodes.Rn, 20.0, dtype=float)
 
-        # --- new structures for TRASMISSIONS per element (only OP and W) ---
+        # --- new structures for TRASMISSIONS per element (OP, W and ADJ) ---
+        #
+        # ADJ was previously excluded here and in the per-timestep accumulator
+        # below. The conductive flow through a party surface *is* assembled into
+        # the solver (its far-side node is driven by ``theta_ztu``), so the
+        # conditioning result already accounts for it -- but it never reached the
+        # reported inventory, so the Sankey balance was short by the whole
+        # adjacent-zone contribution. For apt 305 that is 75.10 m2, 88.6 % of the
+        # envelope UA, and it is the entire closure residual.
         surface_names = [surf["name"] for surf in building_object["building_surface"]]
         surface_types  = [surf["ISO52016_type_string"] for surf in building_object["building_surface"]]
         surface_report_names = _unique_report_names(surface_names)
         surface_report_cols = {
             i: f"Q_tr_surface_{surface_report_names[i]}"
             for i, stype in enumerate(surface_types)
-            if stype in ("OP", "W")
+            if stype in ("OP", "W", "ADJ", "GR")
         }
-        E_trans_loss_by_surface_Wh = {name: 0.0 for name in surface_names}  # riempiamo solo per OP/W
+        E_trans_loss_by_surface_Wh = {name: 0.0 for name in surface_names}  # filled for OP/W/ADJ/GR
+        _has_gr_element = any(stype == "GR" for stype in surface_types)
 
 
         win_col_for_index = {}
@@ -8335,6 +8433,7 @@ class ISO52016:
         E_vent_loss_Wh = 0.0
         E_tb_loss_Wh = 0.0
         E_ground_loss_Wh = 0.0
+        E_solar_env_Wh = 0.0   # short-wave absorbed on the outer face of the envelope
         E_storage_Wh = 0.0
         _report_q_solar_gains_all: list[float] = []
         _report_q_internal_gains_all: list[float] = []
@@ -8344,6 +8443,8 @@ class ISO52016:
         _report_q_tr_total_all: list[float] = []
         _report_q_tr_opaque_all: list[float] = []
         _report_q_tr_window_all: list[float] = []
+        _report_q_tr_adjacent_all: list[float] = []
+        _report_q_sol_env_all: list[float] = []
         _report_q_tr_surface_all: dict[str, list[float]] = {
             col: [] for col in surface_report_cols.values()
         }
@@ -9103,40 +9204,135 @@ class ISO52016:
                     else:         E_solar_Wh   += (-q_tb) * dt_h
 
                     # 6) Ground
+                    #
+                    # Two paths could report the same slab. When a GR element exists it
+                    # carries its own external node and is tallied per-surface in (7);
+                    # the lumped ``h_ground * (T_in - T_gr)`` term is then a duplicate
+                    # and is suppressed. The lumped term remains for buildings that
+                    # declare ground contact by area only, with no GR element.
                     T_gr = float(t_Th.Theta_gr_ve[month_arr[Tstepi]])
-                    h_ground = _ground_conductance_w_per_k(
+                    h_ground = 0.0 if _has_gr_element else _ground_conductance_w_per_k(
                         float(getattr(t_Th, "ground_contact_area", 0.0)),
                         t_Th,
                     )
-                    q_ground = h_ground * (T_in - T_gr)
+                    # ``h_ground`` is exactly 0 when nothing touches the ground. The
+                    # virtual-ground temperature is then formed by a division by that
+                    # same zero area upstream, so T_gr comes back +/-inf and the product
+                    # 0 * inf is NaN. Every comparison against NaN is False, so the
+                    # `else` branch used to fold a NaN into E_solar_Wh and the whole
+                    # balance became unevaluable. No ground contact means no ground flow:
+                    # short-circuit to 0 rather than multiplying by a non-finite T_gr.
+                    if h_ground == 0.0 or not np.isfinite(T_gr):
+                        q_ground = 0.0
+                    else:
+                        q_ground = h_ground * (T_in - T_gr)
                     if q_ground > 0:  E_ground_loss_Wh += q_ground * dt_h
                     else:             E_solar_Wh       += (-q_ground) * dt_h
 
-                    # 7) Transmission for element (OP, W)
+                    # 7) Transmission per element (OP, W, ADJ), measured at the OUTER face
+                    #
+                    # CONTROL VOLUME. The inventory is a balance over the zone air *plus
+                    # the envelope elements* -- which is already the volume the storage
+                    # term spans, since ``C_state`` carries every element node's areal
+                    # capacity. Transmission must therefore be read where that volume
+                    # ends: the element's external node, not its internal surface node.
+                    #
+                    # Read at the internal face instead, the balance is short by exactly
+                    # the radiative fractions of the gains, because ISO 52016-1 formula
+                    # (39) deposits (1 - f_int_c) * Phi_int and (1 - f_sol_c) * Phi_sol
+                    # straight onto the internal surface nodes: that energy reaches the
+                    # envelope without ever crossing the air node, so an internal-face
+                    # reading never sees it. On apt 305 that term is
+                    # 0.6 * 730.29 + 0.9 * 718.23 = 1 084.58 kWh, and it was the entire
+                    # residual left once the ADJ surfaces were tallied.
+                    #
+                    # Each branch below mirrors, exactly, the external-node row the
+                    # solver assembled above -- same coefficients, same boundary
+                    # temperature, same sky/solar treatment -- so the two cannot drift:
+                    #   EXT (static h_re): (h_ce + h_re)(T_se - T_ext) + phi_sky
+                    #   EXT (dynamic h_re): h_ce(T_se - T_ext) + h_re(T_se - T_rad_ref)
+                    #   ADJ:                (h_ce + h_re)(T_se - theta_ztu)
+                    #   GR:                 (1 / R_gr_ve)(T_se - Theta_gr_ve)
+    # Absorbed short-wave, a_sol * I_sol, is a source at that same node, so the
+                    # net flow crossing the boundary at that surface is
+                    # (conduction + radiation to ambient) - (absorbed short-wave). That
+                    # sol-air netting is what a transmission line item reports here: on
+                    # a dark west brick wall the two gross terms are ~9.2 and ~10.1 MWh
+                    # and very nearly cancel, so publishing them separately would bury
+                    # every real term in the balance under a pair of arrows two orders of
+                    # magnitude larger than the heating need. The gross absorbed total is
+                    # still reported, as ``Q_sol_envelope``, so nothing is hidden.
                     T_air = float(Theta_int_air[Tstepi, 0])
                     T_rad = float(Theta_int_r_mn[Tstepi, 0])
                     q_tr_by_surface = {col: 0.0 for col in surface_report_cols.values()}
                     q_tr_total = 0.0
                     q_tr_opaque = 0.0
                     q_tr_window = 0.0
+                    q_tr_adjacent = 0.0
+                    q_sol_env = 0.0
                     for Eli in range(bui_eln):
-                        if surface_types[Eli] not in ("OP", "W"):  continue
+                        stype = surface_types[Eli]
+                        if stype not in ("OP", "W", "ADJ", "GR"):  continue
                         n_nodes_Eli = nodes.Pln[Eli]
                         if n_nodes_Eli == 0:                       continue
-                        vecb_row_surface = nodes.PlnSum[Eli] + n_nodes_Eli
-                        T_surf_int = float(VecB[vecb_row_surface, colB_act])
                         A   = float(area_elements[Eli])
-                        hci = float(heat_convective_elements_internal[Eli])
-                        hri = float(heat_radiative_elements_internal[Eli])
-                        q_cond = A * (hci * (T_air - T_surf_int) + hri * (T_rad - T_surf_int))
+                        row_ext = 1 + int(nodes.PlnSum[Eli])
+                        T_se = float(VecB[row_ext, colB_act])
+                        hce = float(heat_convective_elements_external_t[Eli])
+                        hre = float(heat_radiative_elements_external_t[Eli])
+
+                        if stype == "GR":
+                            r_gr = float(getattr(t_Th, "R_gr_ve", 0.0))
+                            if not np.isfinite(r_gr) or r_gr <= 0.0 or not np.isfinite(T_gr):
+                                q_cond = 0.0
+                            else:
+                                q_cond = A * (T_se - T_gr) / r_gr
+                        elif stype == "ADJ":
+                            # Same boundary temperature the solver used, resolved the
+                            # same way (see the ADJ branch of the external-node
+                            # assembly above).
+                            T_bdy = None
+                            if building_object['building']['adj_zones_present']:
+                                if int(building_object['building']['number_adj_zone']) > 1:
+                                    _nm = name_adjacent_zones[Eli]
+                                    if _nm is not None and _nm in theta_ztu_df.columns:
+                                        T_bdy = float(theta_ztu_df[_nm].iloc[Tstepi])
+                                else:
+                                    T_bdy = float(theta_ztu[Tstepi])
+                            q_cond = (
+                                0.0 if T_bdy is None
+                                else A * (hce + hre) * (T_se - T_bdy)
+                            )
+                        else:  # OP / W -- outdoor boundary
+                            if h_re_model == "dynamic":
+                                q_cond = A * (
+                                    hce * (T_se - T_out)
+                                    + hre * (T_se - float(ext_rad_ref_temp_t[Eli]))
+                                )
+                            else:
+                                phi_sky_eli = (
+                                    float(sky_factor_elements[Eli]) * hre * delta_Theta_er
+                                )
+                                q_cond = A * ((hce + hre) * (T_se - T_out) + phi_sky_eli)
+                            q_sol_eli = A * float(a_sol_pli_eli[0, Eli]) * float(
+                                I_sol_tot_el[Tstepi, Eli]
+                            )
+                            q_sol_env += q_sol_eli
+                            q_cond -= q_sol_eli
+
                         if   q_cond > 0: E_trans_loss_by_surface_Wh[surface_names[Eli]] += q_cond * dt_h
                         elif q_cond < 0: E_solar_Wh += (-q_cond) * dt_h
                         q_tr_total += q_cond
-                        if surface_types[Eli] == "OP":
+                        if stype == "OP":
                             q_tr_opaque += q_cond
-                        elif surface_types[Eli] == "W":
+                        elif stype == "W":
                             q_tr_window += q_cond
-                        q_tr_by_surface[surface_report_cols[Eli]] = q_cond
+                        elif stype == "ADJ":
+                            q_tr_adjacent += q_cond
+                        if Eli in surface_report_cols:
+                            q_tr_by_surface[surface_report_cols[Eli]] = q_cond
+
+                    E_solar_env_Wh += q_sol_env * dt_h
 
                     _report_q_solar_gains_all.append(phi_solar)
                     _report_q_internal_gains_all.append(phi_int)
@@ -9146,6 +9342,8 @@ class ISO52016:
                     _report_q_tr_total_all.append(q_tr_total)
                     _report_q_tr_opaque_all.append(q_tr_opaque)
                     _report_q_tr_window_all.append(q_tr_window)
+                    _report_q_tr_adjacent_all.append(q_tr_adjacent)
+                    _report_q_sol_env_all.append(q_sol_env)
                     for col in _report_q_tr_surface_all:
                         _report_q_tr_surface_all[col].append(q_tr_by_surface.get(col, 0.0))
                     if _report_component_ventilation and _vent_bdy_tstep is not None:
@@ -9169,7 +9367,11 @@ class ISO52016:
             return 0.0 if abs(x) < 1e-9 else x
 
         # total inputs (Wh)
-        inputs_Wh = _clamp(E_heating_Wh) + _clamp(E_internal_Wh) + _clamp(E_solar_Wh)
+        inputs_Wh = (
+            _clamp(E_heating_Wh)
+            + _clamp(E_internal_Wh)
+            + _clamp(E_solar_Wh)
+        )
 
         # total losses (Wh)
         E_transmission_surfaces_Wh = sum(max(0.0, v) for v in E_trans_loss_by_surface_Wh.values())
@@ -9180,7 +9382,7 @@ class ISO52016:
             + _clamp(E_vent_loss_Wh)  # ventilation
             + _clamp(E_tb_loss_Wh)    # thermal bridges
             + _clamp(E_ground_loss_Wh)# ground
-            + _clamp(E_transmission_surfaces_Wh)  # transmission OP/W
+            + _clamp(E_transmission_surfaces_Wh)  # transmission OP/W/ADJ
         )
 
         # balance residual (Wh)
@@ -9229,6 +9431,22 @@ class ISO52016:
         _rel = _res / max(1.0, _inputs)
         print(f"SANKEY CHECK  inputs={_inputs:.1f}  outputs+storage={_outs_plus_storage:.1f}  residual={_res:.1f} Wh ({100*_rel:.3f}%)")
 
+        # V2 closure block: the residual measured *before* the sub-1 % absorption
+        # into storage, so a consumer cannot mistake "absorbed" for "closed".
+        # Reported here rather than left for each harness to re-derive.
+        sankey_data["closure"] = {
+            "inputs_Wh": _inputs,
+            "outputs_Wh": outputs_Wh,
+            "storage_Wh": _clamp(E_storage_Wh),
+            "residual_Wh": _res,
+            "residual_pct": 100.0 * _rel,
+            "solar_absorbed_envelope_Wh": _clamp(E_solar_env_Wh),
+            "transmission_surfaces_Wh": dict(E_trans_loss_by_surface_Wh),
+            "surface_iso_types": {
+                surface_names[i]: surface_types[i] for i in range(len(surface_names))
+            },
+        }
+
         # =========================
         #  HOURLY AND ANNUAL RESULTS
         # =========================
@@ -9269,6 +9487,8 @@ class ISO52016:
         hourly_results["Q_tr_total"] = np.asarray(_report_q_tr_total_all, dtype=float)
         hourly_results["Q_tr_opaque"] = np.asarray(_report_q_tr_opaque_all, dtype=float)
         hourly_results["Q_tr_window"] = np.asarray(_report_q_tr_window_all, dtype=float)
+        hourly_results["Q_tr_adjacent"] = np.asarray(_report_q_tr_adjacent_all, dtype=float)
+        hourly_results["Q_sol_envelope"] = np.asarray(_report_q_sol_env_all, dtype=float)
         hourly_results["Q_tb"] = np.asarray(_report_q_tb_all, dtype=float)
         hourly_results["Q_ground"] = np.asarray(_report_q_ground_all, dtype=float)
         for _surface_col, _surface_values in _report_q_tr_surface_all.items():
@@ -9371,15 +9591,57 @@ class ISO52016:
             hourly_results["Q_latent_vent_Wh"]       = np.clip(latent_arr[:, 4], 0.0, None)
             hourly_results["Q_int_latent_W"]         = latent_arr[:, 5]                        # internal latent gains (signed)
             hourly_results["Q_latent_W_signed"]      = latent_arr[:, 6]                        # total signed (vent + int)
-            hourly_results["Q_latent_W"]             = np.clip(latent_arr[:, 6], 0.0, None)   # latent cooling need
-            hourly_results["Q_latent_Wh"]            = np.clip(latent_arr[:, 7], 0.0, None)
-            hourly_results["Q_H_latent_W"]           = np.clip(-latent_arr[:, 6], 0.0, None)  # latent heating need (humidification)
-            hourly_results["Q_H_latent_Wh"]          = np.clip(-latent_arr[:, 7], 0.0, None)
+
+            # --- PLANT GATING (AIB latent-gating fix) --------------------------
+            # What the two clips below produce is a *moisture balance* of the
+            # zone: it is non-zero in essentially every hour of the year, because
+            # outdoor air is essentially never at exactly the indoor reference
+            # humidity. Booked unconditionally it charged 8757 of 8760 hours
+            # against 66 hours of actual cooling-plant operation -- 551.33 of
+            # 553.62 kWh with the plant off, and 17.34 kWh of it while the
+            # *heating* plant was running, which is not a physically coherent
+            # thing to add to a cooling need.
+            #
+            # A latent COOLING need is the moisture the cooling system has to
+            # remove, so it exists only where the system is running and
+            # dehumidification is actually demanded. Two conditions, both
+            # required:
+            #   * the cooling plant is operating   (sensible Q_C > 0), and
+            #   * the moisture balance calls for dehumidification
+            #     (signed latent > 0 -- inside the EN 16798-1 humidity band
+            #     ``_latent_heat_load_from_air_exchange`` already returns 0).
+            # Latent HEATING (humidification) is gated symmetrically on the
+            # heating plant.
+            #
+            # The ungated series is kept, as ``*_ungated``, so the moisture
+            # balance is still inspectable and this fix is auditable; it is the
+            # gated series that feeds the energy need.
+            _q_c_sens = pd.to_numeric(hourly_results["Q_C"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+            _q_h_sens = pd.to_numeric(hourly_results["Q_H"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+            _cooling_on = _q_c_sens > 0.0
+            _heating_on = _q_h_sens > 0.0
+
+            _lat_c_w  = np.clip(latent_arr[:, 6], 0.0, None)   # dehumidification demanded
+            _lat_c_wh = np.clip(latent_arr[:, 7], 0.0, None)
+            _lat_h_w  = np.clip(-latent_arr[:, 6], 0.0, None)  # humidification demanded
+            _lat_h_wh = np.clip(-latent_arr[:, 7], 0.0, None)
+
+            hourly_results["Q_latent_W_ungated"]     = _lat_c_w
+            hourly_results["Q_H_latent_W_ungated"]   = _lat_h_w
+            hourly_results["latent_cooling_gate"]    = _cooling_on.astype(float)
+            hourly_results["latent_heating_gate"]    = _heating_on.astype(float)
+
+            hourly_results["Q_latent_W"]             = np.where(_cooling_on, _lat_c_w,  0.0)  # latent cooling need
+            hourly_results["Q_latent_Wh"]            = np.where(_cooling_on, _lat_c_wh, 0.0)
+            hourly_results["Q_H_latent_W"]           = np.where(_heating_on, _lat_h_w,  0.0)  # latent heating need
+            hourly_results["Q_H_latent_Wh"]          = np.where(_heating_on, _lat_h_wh, 0.0)
         else:
             for _col in ("X_ext_kg_kg_da", "X_int_ref_kg_kg_da", "m_dot_vent_kg_s",
                          "Q_latent_vent_W", "Q_latent_vent_Wh", "Q_int_latent_W",
                          "Q_latent_W_signed", "Q_latent_W", "Q_latent_Wh",
-                         "Q_H_latent_W", "Q_H_latent_Wh"):
+                         "Q_H_latent_W", "Q_H_latent_Wh",
+                         "Q_latent_W_ungated", "Q_H_latent_W_ungated",
+                         "latent_cooling_gate", "latent_heating_gate"):
                 hourly_results[_col] = 0.0
 
         hourly_results["Q_C_sensible"] = hourly_results["Q_C"]
@@ -9406,6 +9668,7 @@ class ISO52016:
             "Q_latent_annual_kWh_per_sqm": (Q_latent_annual / 1000.0 / A_use) if A_use > 0 else 0.0,
             "time_step_h": dt_h_annual,
         }
+        _add_latent_split_annual_columns(hourly_results, annual_results_dic, dt_h_annual)
         _add_annual_balance_columns(hourly_results, annual_results_dic, A_use, dt_h_annual)
         annual_results_df = pd.DataFrame([annual_results_dic])
 
@@ -9625,17 +9888,7 @@ class ISO52016:
             # Element types and orientations
             typology_elements = np.array(bui_eln * ["EXT"], dtype="object")
             for i, surf in enumerate(building_object["building_surface"]):
-                if surf["type"] == "opaque":
-                    if surf["sky_view_factor"] == 0:
-                        typology_elements[i] = "GR"
-                    else:
-                        typology_elements[i] = "OP"
-                elif surf["type"] == "adiabatic":
-                    typology_elements[i] = "AD"
-                elif surf["type"] == "transparent":
-                    typology_elements[i] = "W"
-                elif surf["type"] == "adjacent":
-                    typology_elements[i] = "ADJ"
+                typology_elements[i] = _classify_iso52016_element(surf)
                 surf["ISO52016_type_string"] = typology_elements[i]
 
             Type_eli = bui_eln * ["EXT"]
@@ -9716,6 +9969,14 @@ class ISO52016:
 
             # 3) Reconstruct helpers after aggregation
             bui_eln = len(building_object["building_surface"])
+            # ``name_adjacent_zones`` was built from the PRE-aggregation surface
+            # list and then indexed with post-aggregation ``Eli``. Any collapse
+            # shifts the indices, so the ADJ boundary temperature could be read
+            # from the wrong neighbour. Rebuild it against the list the solver
+            # actually iterates.
+            name_adjacent_zones = [
+                surface.get("name_adj_zone") for surface in building_object["building_surface"]
+            ]
             typology_elements = np.array([s["ISO52016_type_string"] for s in building_object["building_surface"]], dtype=object)
             Type_eli = ["EXT" if t not in ("GR", "ADJ", "AD") else t for t in typology_elements]
             orientation_elements = np.array([s["ISO52016_orientation_string"] for s in building_object["building_surface"]], dtype=object)
@@ -10044,6 +10305,7 @@ class ISO52016:
         E_vent_loss_Wh = 0.0
         E_tb_loss_Wh = 0.0
         E_ground_loss_Wh = 0.0
+        E_solar_env_Wh = 0.0   # short-wave absorbed on the outer face of the envelope
         E_storage_Wh = 0.0
 
         # ------------------------------------------------------------------
@@ -10066,16 +10328,25 @@ class ISO52016:
         theta_op_prev_causal = 20.0
         theta_rad_prev_causal = 20.0
 
-        # --- new structures for TRASMISSIONS per element (only OP and W) ---
+        # --- new structures for TRASMISSIONS per element (OP, W and ADJ) ---
+        #
+        # ADJ was previously excluded here and in the per-timestep accumulator
+        # below. The conductive flow through a party surface *is* assembled into
+        # the solver (its far-side node is driven by ``theta_ztu``), so the
+        # conditioning result already accounts for it -- but it never reached the
+        # reported inventory, so the Sankey balance was short by the whole
+        # adjacent-zone contribution. For apt 305 that is 75.10 m2, 88.6 % of the
+        # envelope UA, and it is the entire closure residual.
         surface_names = [surf["name"] for surf in building_object["building_surface"]]
         surface_types  = [surf["ISO52016_type_string"] for surf in building_object["building_surface"]]
         surface_report_names = _unique_report_names(surface_names)
         surface_report_cols = {
             i: f"Q_tr_surface_{surface_report_names[i]}"
             for i, stype in enumerate(surface_types)
-            if stype in ("OP", "W")
+            if stype in ("OP", "W", "ADJ", "GR")
         }
-        E_trans_loss_by_surface_Wh = {name: 0.0 for name in surface_names}  # riempiamo solo per OP/W
+        E_trans_loss_by_surface_Wh = {name: 0.0 for name in surface_names}  # filled for OP/W/ADJ/GR
+        _has_gr_element = any(stype == "GR" for stype in surface_types)
 
 
         win_col_for_index = {}
@@ -10098,6 +10369,7 @@ class ISO52016:
         E_vent_loss_Wh = 0.0
         E_tb_loss_Wh = 0.0
         E_ground_loss_Wh = 0.0
+        E_solar_env_Wh = 0.0   # short-wave absorbed on the outer face of the envelope
         E_storage_Wh = 0.0
         _report_q_solar_gains_all: list[float] = []
         _report_q_internal_gains_all: list[float] = []
@@ -10107,6 +10379,8 @@ class ISO52016:
         _report_q_tr_total_all: list[float] = []
         _report_q_tr_opaque_all: list[float] = []
         _report_q_tr_window_all: list[float] = []
+        _report_q_tr_adjacent_all: list[float] = []
+        _report_q_sol_env_all: list[float] = []
         _report_q_tr_surface_all: dict[str, list[float]] = {
             col: [] for col in surface_report_cols.values()
         }
@@ -10928,40 +11202,135 @@ class ISO52016:
                     else:         E_solar_Wh   += (-q_tb) * dt_h
 
                     # 6) Ground
+                    #
+                    # Two paths could report the same slab. When a GR element exists it
+                    # carries its own external node and is tallied per-surface in (7);
+                    # the lumped ``h_ground * (T_in - T_gr)`` term is then a duplicate
+                    # and is suppressed. The lumped term remains for buildings that
+                    # declare ground contact by area only, with no GR element.
                     T_gr = float(t_Th.Theta_gr_ve[month_arr[Tstepi]])
-                    h_ground = _ground_conductance_w_per_k(
+                    h_ground = 0.0 if _has_gr_element else _ground_conductance_w_per_k(
                         float(getattr(t_Th, "ground_contact_area", 0.0)),
                         t_Th,
                     )
-                    q_ground = h_ground * (T_in - T_gr)
+                    # ``h_ground`` is exactly 0 when nothing touches the ground. The
+                    # virtual-ground temperature is then formed by a division by that
+                    # same zero area upstream, so T_gr comes back +/-inf and the product
+                    # 0 * inf is NaN. Every comparison against NaN is False, so the
+                    # `else` branch used to fold a NaN into E_solar_Wh and the whole
+                    # balance became unevaluable. No ground contact means no ground flow:
+                    # short-circuit to 0 rather than multiplying by a non-finite T_gr.
+                    if h_ground == 0.0 or not np.isfinite(T_gr):
+                        q_ground = 0.0
+                    else:
+                        q_ground = h_ground * (T_in - T_gr)
                     if q_ground > 0:  E_ground_loss_Wh += q_ground * dt_h
                     else:             E_solar_Wh       += (-q_ground) * dt_h
 
-                    # 7) Transmission for element (OP, W)
+                    # 7) Transmission per element (OP, W, ADJ), measured at the OUTER face
+                    #
+                    # CONTROL VOLUME. The inventory is a balance over the zone air *plus
+                    # the envelope elements* -- which is already the volume the storage
+                    # term spans, since ``C_state`` carries every element node's areal
+                    # capacity. Transmission must therefore be read where that volume
+                    # ends: the element's external node, not its internal surface node.
+                    #
+                    # Read at the internal face instead, the balance is short by exactly
+                    # the radiative fractions of the gains, because ISO 52016-1 formula
+                    # (39) deposits (1 - f_int_c) * Phi_int and (1 - f_sol_c) * Phi_sol
+                    # straight onto the internal surface nodes: that energy reaches the
+                    # envelope without ever crossing the air node, so an internal-face
+                    # reading never sees it. On apt 305 that term is
+                    # 0.6 * 730.29 + 0.9 * 718.23 = 1 084.58 kWh, and it was the entire
+                    # residual left once the ADJ surfaces were tallied.
+                    #
+                    # Each branch below mirrors, exactly, the external-node row the
+                    # solver assembled above -- same coefficients, same boundary
+                    # temperature, same sky/solar treatment -- so the two cannot drift:
+                    #   EXT (static h_re): (h_ce + h_re)(T_se - T_ext) + phi_sky
+                    #   EXT (dynamic h_re): h_ce(T_se - T_ext) + h_re(T_se - T_rad_ref)
+                    #   ADJ:                (h_ce + h_re)(T_se - theta_ztu)
+                    #   GR:                 (1 / R_gr_ve)(T_se - Theta_gr_ve)
+    # Absorbed short-wave, a_sol * I_sol, is a source at that same node, so the
+                    # net flow crossing the boundary at that surface is
+                    # (conduction + radiation to ambient) - (absorbed short-wave). That
+                    # sol-air netting is what a transmission line item reports here: on
+                    # a dark west brick wall the two gross terms are ~9.2 and ~10.1 MWh
+                    # and very nearly cancel, so publishing them separately would bury
+                    # every real term in the balance under a pair of arrows two orders of
+                    # magnitude larger than the heating need. The gross absorbed total is
+                    # still reported, as ``Q_sol_envelope``, so nothing is hidden.
                     T_air = float(Theta_int_air[Tstepi, 0])
                     T_rad = float(Theta_int_r_mn[Tstepi, 0])
                     q_tr_by_surface = {col: 0.0 for col in surface_report_cols.values()}
                     q_tr_total = 0.0
                     q_tr_opaque = 0.0
                     q_tr_window = 0.0
+                    q_tr_adjacent = 0.0
+                    q_sol_env = 0.0
                     for Eli in range(bui_eln):
-                        if surface_types[Eli] not in ("OP", "W"):  continue
+                        stype = surface_types[Eli]
+                        if stype not in ("OP", "W", "ADJ", "GR"):  continue
                         n_nodes_Eli = nodes.Pln[Eli]
                         if n_nodes_Eli == 0:                       continue
-                        vecb_row_surface = nodes.PlnSum[Eli] + n_nodes_Eli
-                        T_surf_int = float(VecB[vecb_row_surface, colB_act])
                         A   = float(area_elements[Eli])
-                        hci = float(heat_convective_elements_internal[Eli])
-                        hri = float(heat_radiative_elements_internal[Eli])
-                        q_cond = A * (hci * (T_air - T_surf_int) + hri * (T_rad - T_surf_int))
+                        row_ext = 1 + int(nodes.PlnSum[Eli])
+                        T_se = float(VecB[row_ext, colB_act])
+                        hce = float(heat_convective_elements_external_t[Eli])
+                        hre = float(heat_radiative_elements_external_t[Eli])
+
+                        if stype == "GR":
+                            r_gr = float(getattr(t_Th, "R_gr_ve", 0.0))
+                            if not np.isfinite(r_gr) or r_gr <= 0.0 or not np.isfinite(T_gr):
+                                q_cond = 0.0
+                            else:
+                                q_cond = A * (T_se - T_gr) / r_gr
+                        elif stype == "ADJ":
+                            # Same boundary temperature the solver used, resolved the
+                            # same way (see the ADJ branch of the external-node
+                            # assembly above).
+                            T_bdy = None
+                            if building_object['building']['adj_zones_present']:
+                                if int(building_object['building']['number_adj_zone']) > 1:
+                                    _nm = name_adjacent_zones[Eli]
+                                    if _nm is not None and _nm in theta_ztu_df.columns:
+                                        T_bdy = float(theta_ztu_df[_nm].iloc[Tstepi])
+                                else:
+                                    T_bdy = float(theta_ztu[Tstepi])
+                            q_cond = (
+                                0.0 if T_bdy is None
+                                else A * (hce + hre) * (T_se - T_bdy)
+                            )
+                        else:  # OP / W -- outdoor boundary
+                            if h_re_model == "dynamic":
+                                q_cond = A * (
+                                    hce * (T_se - T_out)
+                                    + hre * (T_se - float(ext_rad_ref_temp_t[Eli]))
+                                )
+                            else:
+                                phi_sky_eli = (
+                                    float(sky_factor_elements[Eli]) * hre * delta_Theta_er
+                                )
+                                q_cond = A * ((hce + hre) * (T_se - T_out) + phi_sky_eli)
+                            q_sol_eli = A * float(a_sol_pli_eli[0, Eli]) * float(
+                                I_sol_tot_el[Tstepi, Eli]
+                            )
+                            q_sol_env += q_sol_eli
+                            q_cond -= q_sol_eli
+
                         if   q_cond > 0: E_trans_loss_by_surface_Wh[surface_names[Eli]] += q_cond * dt_h
                         elif q_cond < 0: E_solar_Wh += (-q_cond) * dt_h
                         q_tr_total += q_cond
-                        if surface_types[Eli] == "OP":
+                        if stype == "OP":
                             q_tr_opaque += q_cond
-                        elif surface_types[Eli] == "W":
+                        elif stype == "W":
                             q_tr_window += q_cond
-                        q_tr_by_surface[surface_report_cols[Eli]] = q_cond
+                        elif stype == "ADJ":
+                            q_tr_adjacent += q_cond
+                        if Eli in surface_report_cols:
+                            q_tr_by_surface[surface_report_cols[Eli]] = q_cond
+
+                    E_solar_env_Wh += q_sol_env * dt_h
 
                     _report_q_solar_gains_all.append(phi_solar)
                     _report_q_internal_gains_all.append(phi_int)
@@ -10971,6 +11340,8 @@ class ISO52016:
                     _report_q_tr_total_all.append(q_tr_total)
                     _report_q_tr_opaque_all.append(q_tr_opaque)
                     _report_q_tr_window_all.append(q_tr_window)
+                    _report_q_tr_adjacent_all.append(q_tr_adjacent)
+                    _report_q_sol_env_all.append(q_sol_env)
                     for col in _report_q_tr_surface_all:
                         _report_q_tr_surface_all[col].append(q_tr_by_surface.get(col, 0.0))
                     if _report_component_ventilation and _vent_bdy_tstep is not None:
@@ -10997,7 +11368,11 @@ class ISO52016:
             return 0.0 if abs(x) < 1e-9 else x
 
         # total inputs (Wh)
-        inputs_Wh = _clamp(E_heating_Wh) + _clamp(E_internal_Wh) + _clamp(E_solar_Wh)
+        inputs_Wh = (
+            _clamp(E_heating_Wh)
+            + _clamp(E_internal_Wh)
+            + _clamp(E_solar_Wh)
+        )
 
         # total losses (Wh)
         E_transmission_surfaces_Wh = sum(max(0.0, v) for v in E_trans_loss_by_surface_Wh.values())
@@ -11008,7 +11383,7 @@ class ISO52016:
             + _clamp(E_vent_loss_Wh)  # ventilation
             + _clamp(E_tb_loss_Wh)    # thermal bridges
             + _clamp(E_ground_loss_Wh)# ground
-            + _clamp(E_transmission_surfaces_Wh)  # transmission OP/W
+            + _clamp(E_transmission_surfaces_Wh)  # transmission OP/W/ADJ
         )
 
         # balance residual (Wh)
@@ -11057,6 +11432,22 @@ class ISO52016:
         _rel = _res / max(1.0, _inputs)
         print(f"SANKEY CHECK  inputs={_inputs:.1f}  outputs+storage={_outs_plus_storage:.1f}  residual={_res:.1f} Wh ({100*_rel:.3f}%)")
 
+        # V2 closure block: the residual measured *before* the sub-1 % absorption
+        # into storage, so a consumer cannot mistake "absorbed" for "closed".
+        # Reported here rather than left for each harness to re-derive.
+        sankey_data["closure"] = {
+            "inputs_Wh": _inputs,
+            "outputs_Wh": outputs_Wh,
+            "storage_Wh": _clamp(E_storage_Wh),
+            "residual_Wh": _res,
+            "residual_pct": 100.0 * _rel,
+            "solar_absorbed_envelope_Wh": _clamp(E_solar_env_Wh),
+            "transmission_surfaces_Wh": dict(E_trans_loss_by_surface_Wh),
+            "surface_iso_types": {
+                surface_names[i]: surface_types[i] for i in range(len(surface_names))
+            },
+        }
+
         # =========================
         #  HOURLY AND ANNUAL RESULTS
         # =========================
@@ -11099,6 +11490,8 @@ class ISO52016:
         hourly_results["Q_tr_total"] = np.asarray(_report_q_tr_total_all, dtype=float)
         hourly_results["Q_tr_opaque"] = np.asarray(_report_q_tr_opaque_all, dtype=float)
         hourly_results["Q_tr_window"] = np.asarray(_report_q_tr_window_all, dtype=float)
+        hourly_results["Q_tr_adjacent"] = np.asarray(_report_q_tr_adjacent_all, dtype=float)
+        hourly_results["Q_sol_envelope"] = np.asarray(_report_q_sol_env_all, dtype=float)
         hourly_results["Q_tb"] = np.asarray(_report_q_tb_all, dtype=float)
         hourly_results["Q_ground"] = np.asarray(_report_q_ground_all, dtype=float)
         for _surface_col, _surface_values in _report_q_tr_surface_all.items():
@@ -11149,6 +11542,9 @@ class ISO52016:
             "Q_C_annual_kWh_per_sqm": (Q_C_annual / 1000.0 / A_use) if A_use > 0 else 0.0,
             "time_step_h": dt_h_annual,
         }
+        # This core carries no latent post-processing, so the split reports the
+        # sensible need with latent at zero -- same annual schema either way.
+        _add_latent_split_annual_columns(hourly_results, annual_results_dic, dt_h_annual)
         _add_annual_balance_columns(hourly_results, annual_results_dic, A_use, dt_h_annual)
         annual_results_df = pd.DataFrame([annual_results_dic])
 
