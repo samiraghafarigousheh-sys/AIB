@@ -1083,6 +1083,54 @@ def _add_need_attribution_columns(
     return hourly_results
 
 
+def _classify_iso52016_element(surf: dict) -> str:
+    """Map one surface dictionary onto its ISO 52016-1 element class.
+
+    Returns one of ``"GR"`` (ground contact), ``"AD"`` (adiabatic), ``"W"``
+    (transparent), ``"ADJ"`` (partition to another zone) or ``"OP"`` (opaque to
+    outdoor air).
+
+    WHY THIS IS NOT THE OLD RULE
+    ----------------------------
+    The rule this replaces was ``type == "opaque" and sky_view_factor == 0 ->
+    GR``. A zero sky-view factor means "not exposed to sky". That is true of
+    *any* internal partition, floor or ceiling, and says nothing whatever about
+    ground contact. On apt 305 -- a third-floor apartment -- it buried all five
+    party surfaces, **including the ceiling**, as slab-on-ground: 75.10 m2 of
+    phantom slab clamped near the ISO 13370 ground temperature, collapsing
+    annual heating to 15.86 kWh and inflating cooling to 2 027.5 kWh. That was
+    the whole of the config-A / config-B contradiction, and it turned on one
+    field of the building dictionary.
+
+    A surface is ground-coupled only when it is *declared* to be, via an
+    explicit ``boundary == "GROUND"`` (consistent with ``_ground_contact_area``,
+    which already trusts that tag and the resulting ``GR`` type and nothing
+    else). Zero sky-view alone never routes a surface to GR.
+
+    A zero-sky-view surface that names an adjacent zone is a partition, ``ADJ``.
+    One that is neither ground nor adjacent is genuinely ambiguous -- the user
+    has to say which -- so it stays ``OP`` and the validator raises a warning
+    rather than silently burying it in the earth.
+    """
+    stype = str(surf.get("type", "") or "").strip().lower()
+    boundary = str(surf.get("boundary", "") or "").strip().upper()
+
+    if boundary == "GROUND":
+        return "GR"
+    if boundary == "ADIABATIC" or stype == "adiabatic":
+        return "AD"
+    if boundary == "INTERNAL" or stype == "adjacent":
+        return "ADJ"
+    if stype == "transparent":
+        return "W"
+    # Opaque, no explicit boundary: a named adjacent zone still makes it a
+    # partition. This is what the old rule ignored -- a ``name_adj_zone`` on an
+    # ``"opaque"`` surface was silently dropped.
+    if surf.get("name_adj_zone"):
+        return "ADJ"
+    return "OP"
+
+
 def _add_latent_split_annual_columns(
     hourly_results: pd.DataFrame,
     annual_results_dic: dict,
@@ -5369,17 +5417,9 @@ class ISO52016:
         # Keep compatibility with existing helper methods:
         # OP/W for outdoors, GR for ground, AD for adiabatic, ADJ for internal partition
         for surf in surfaces:
-            bnd = surf.get("boundary", "OUTDOORS").upper()
-            if bnd == "GROUND":
-                surf["ISO52016_type_string"] = "GR"
-            elif bnd == "ADIABATIC":
-                surf["ISO52016_type_string"] = "AD"
-            elif bnd == "INTERNAL":
-                surf["ISO52016_type_string"] = "ADJ"
-            else:
-                surf["ISO52016_type_string"] = (
-                    "W" if surf.get("type", "").lower() == "transparent" else "OP"
-                )
+            # One classifier for every entry point, so the single-zone core and
+            # the multizone paths cannot disagree about what a surface is.
+            surf["ISO52016_type_string"] = _classify_iso52016_element(surf)
 
         def _orientation_string(surf):
             ori_existing = str(surf.get("ISO52016_orientation_string", "")).upper()
@@ -6971,17 +7011,9 @@ class ISO52016:
         surfaces = building_object["building_surface"]
         Nsurf = len(surfaces)
         for surf in surfaces:
-            bnd = surf.get("boundary", "OUTDOORS").upper()
-            if bnd == "GROUND":
-                surf["ISO52016_type_string"] = "GR"
-            elif bnd == "ADIABATIC":
-                surf["ISO52016_type_string"] = "AD"
-            elif bnd == "INTERNAL":
-                surf["ISO52016_type_string"] = "ADJ"
-            else:
-                surf["ISO52016_type_string"] = (
-                    "W" if surf.get("type", "").lower() == "transparent" else "OP"
-                )
+            # One classifier for every entry point, so the single-zone core and
+            # the multizone paths cannot disagree about what a surface is.
+            surf["ISO52016_type_string"] = _classify_iso52016_element(surf)
 
         def _orientation_string(surf):
             ori_existing = str(surf.get("ISO52016_orientation_string", "")).upper()
@@ -7926,17 +7958,7 @@ class ISO52016:
             # Element types and orientations
             typology_elements = np.array(bui_eln * ["EXT"], dtype="object")
             for i, surf in enumerate(building_object["building_surface"]):
-                if surf["type"] == "opaque":
-                    if surf["sky_view_factor"] == 0:
-                        typology_elements[i] = "GR"
-                    else:
-                        typology_elements[i] = "OP"
-                elif surf["type"] == "adiabatic":
-                    typology_elements[i] = "AD"
-                elif surf["type"] == "transparent":
-                    typology_elements[i] = "W"
-                elif surf["type"] == "adjacent":
-                    typology_elements[i] = "ADJ"
+                typology_elements[i] = _classify_iso52016_element(surf)
                 surf["ISO52016_type_string"] = typology_elements[i]
 
             Type_eli = bui_eln * ["EXT"]
@@ -9866,17 +9888,7 @@ class ISO52016:
             # Element types and orientations
             typology_elements = np.array(bui_eln * ["EXT"], dtype="object")
             for i, surf in enumerate(building_object["building_surface"]):
-                if surf["type"] == "opaque":
-                    if surf["sky_view_factor"] == 0:
-                        typology_elements[i] = "GR"
-                    else:
-                        typology_elements[i] = "OP"
-                elif surf["type"] == "adiabatic":
-                    typology_elements[i] = "AD"
-                elif surf["type"] == "transparent":
-                    typology_elements[i] = "W"
-                elif surf["type"] == "adjacent":
-                    typology_elements[i] = "ADJ"
+                typology_elements[i] = _classify_iso52016_element(surf)
                 surf["ISO52016_type_string"] = typology_elements[i]
 
             Type_eli = bui_eln * ["EXT"]
