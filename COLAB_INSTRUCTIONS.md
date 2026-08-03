@@ -1,6 +1,18 @@
 # Running the Australian Corrections Harness in Google Colab
 
-> ### Start here: `colab_closed_balance.ipynb`
+> ### Notebooks, newest first
+>
+> | Notebook | Covers |
+> | --- | --- |
+> | `colab_canonical_trajectory.ipynb` | the green regression suite, the canonical trajectory in **methodology order** (literature corrections first), and the wind diagnostic that returns **verdict (c)** |
+> | `colab_closed_balance.ipynb` | closing the energy balance: ADJ transmission into the inventory, latent gating, GR classification |
+>
+> **To open the newest in Colab:**
+> ```
+> https://colab.research.google.com/github/samiraghafarigousheh-sys/aib/blob/claude/aib-energy-balance-closure-83epu7/colab_canonical_trajectory.ipynb
+> ```
+>
+> ### On the closed balance: `colab_closed_balance.ipynb`
 >
 > The two notebooks below run the **four-step** harness and report
 > **172.9 → 34.9 kWh/m² (−79.8 %)**. That figure came off an **unclosed energy
