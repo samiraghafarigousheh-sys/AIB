@@ -36,7 +36,11 @@ PANELS = [
     ("__residual_pct",       "V2 Sankey closure residual",       "% of inputs"),
 ]
 
-SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#8b5cf6", "#d4a017", "#c2255c", "#0f766e"]
+# Ten distinct hues: the canonical trajectory has ten states, and a cycling
+# seven-colour palette gave three of them a colour already used earlier in the
+# same chart, which reads as "same state twice".
+SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#8b5cf6", "#d4a017",
+                 "#c2255c", "#0f766e", "#8b5e34", "#a21caf", "#475569"]
 GHOST = "#c8c6c0"
 SURFACE = "#fcfcfb"
 TEXT_PRIMARY = "#0b0b0b"
@@ -52,6 +56,15 @@ def main() -> None:
     ap.add_argument("--outdir", type=Path,
                     default=REPO_ROOT / "results/au_corrections_closed")
     ap.add_argument("--stem", default="au_corrections_closed_balance")
+    ap.add_argument("--title",
+                    default="Apt 305, 50 Barry St Carlton — AU corrections on a closed energy balance")
+    ap.add_argument("--note",
+                    default="Every state measured with the same reporting instrument: the "
+                            "ADJ-transmission, latent-gating and GR-classification fixes are "
+                            "applied to all seven. Each metric on its own axis.")
+    ap.add_argument("--canonical-state", default=None,
+                    help="state whose per-area figure is annotated as canonical "
+                         "(default: the last state)")
     args = ap.parse_args()
 
     import matplotlib
@@ -137,9 +150,10 @@ def main() -> None:
         ax.spines["bottom"].set_color(GRID)
 
         if key in ("Q_H_sensible_kWh", "Q_C_sensible_kWh", "Q_need_total_kWh"):
-            last = vals[-1]
-            if last == last:
-                ax.text(0.985, 0.94, f"final state: {last / area:,.2f} kWh/m²·yr",
+            canon = args.canonical_state if args.canonical_state in states else states[-1]
+            v = vals[states.index(canon)]
+            if v == v:
+                ax.text(0.985, 0.94, f"{canon}: {v / area:,.2f} kWh/m²·yr",
                         transform=ax.transAxes, ha="right", va="top",
                         fontsize=8, color=TEXT_SECONDARY, style="italic")
 
@@ -150,7 +164,7 @@ def main() -> None:
     fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False,
                fontsize=8.5, labelcolor=TEXT_SECONDARY, bbox_to_anchor=(0.5, 0.005))
 
-    fig.suptitle("Apt 305, 50 Barry St Carlton — AU corrections on a closed energy balance",
+    fig.suptitle(args.title,
                  fontsize=15, color=TEXT_PRIMARY, x=0.008, ha="left", y=0.985,
                  fontweight="semibold")
     fig.text(0.008, 0.949,
@@ -158,10 +172,7 @@ def main() -> None:
              f"1.62 m² west-facing single glazing · "
              f"AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw",
              fontsize=9, color=TEXT_SECONDARY, ha="left")
-    fig.text(0.008, 0.921,
-             "Every state measured with the same reporting instrument: the ADJ-transmission, "
-             "latent-gating and GR-classification fixes are applied to all seven. "
-             "Each metric on its own axis.",
+    fig.text(0.008, 0.921, args.note,
              fontsize=8.5, color=TEXT_SECONDARY, ha="left", style="italic")
 
     fig.tight_layout(rect=[0, 0.075, 1, 0.905])
