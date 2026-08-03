@@ -1,5 +1,31 @@
 # Running the Australian Corrections Harness in Google Colab
 
+> ### Start here: `colab_closed_balance.ipynb`
+>
+> The two notebooks below run the **four-step** harness and report
+> **172.9 → 34.9 kWh/m² (−79.8 %)**. That figure came off an **unclosed energy
+> balance**: the V2 Sankey residual ran 62 % → −20 % across those states, with
+> 75.10 m² of party surface — 88.6 % of the envelope UA — missing from the
+> reported inventory entirely, and a latent term charged in 8 758 of 8 760 hours
+> against ~146 hours of actual plant operation.
+>
+> Those defects are fixed. `colab_closed_balance.ipynb` runs the seven-state
+> harness on a closed balance and enforces the gate — **residual < 5 % on every
+> state** — before any headline is quoted. Use it for anything that is going into
+> the paper. Full analysis: `results/au_corrections_closed/NOTES.md`.
+>
+> **To open in Colab:**
+> ```
+> https://colab.research.google.com/github/samiraghafarigousheh-sys/aib/blob/claude/aib-energy-balance-closure-83epu7/colab_closed_balance.ipynb
+> ```
+>
+> It clones the repo, checks out the closed-balance branch, runs the harness,
+> prints the gate table, rebuilds the faceted chart and runs the regression
+> tests. Roughly 5–10 minutes on a CPU runtime.
+>
+> The two notebooks below are kept as the record of the four-step work. Read
+> their numbers as *before* measurements.
+
 Two notebooks are provided to execute the four-step cumulative correction harness in Colab:
 
 ## Quick Start

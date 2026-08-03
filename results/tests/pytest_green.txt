@@ -1,0 +1,91 @@
+# pytest, clean-checkout run — Item 1 acceptance record
+#
+# Environment: a venv holding only what Google Colab ships (numpy, pandas,
+# matplotlib, plotly, scipy, scikit-learn, pytz, requests, tqdm, pytest) plus
+# the four the notebook installs (pvlib, timezonefinder, holidays, workalendar)
+# plus pyecharts. No PYTHONPATH is set: the suite must load on its own.
+#
+# Command: python -m pytest tests/ -q
+# Recorded: 2026-08-03 00:36 UTC
+# Commit:  b00e9a3
+
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/user/AIB
+collected 198 items
+
+tests/test_apt305_conditioned_zones.py .....                             [  2%]
+tests/test_apt305_ground_and_hemisphere.py .......                       [  6%]
+tests/test_apt305_internal_gains_invariance.py .....                     [  8%]
+tests/test_coldest_month_hemisphere.py ..........................        [ 21%]
+tests/test_conditioned_adjacent_zones.py ...........................     [ 35%]
+tests/test_dynamic_surface_coefficients.py ....................          [ 45%]
+tests/test_dynamic_window_properties.py ................................ [ 61%]
+                                                                         [ 61%]
+tests/test_gr_classification.py .................                        [ 70%]
+tests/test_ground_contact_area.py .........................              [ 82%]
+tests/test_internal_gains_adjacency.py ................                  [ 90%]
+tests/test_latent_gating.py ........                                     [ 94%]
+tests/test_sankey_closure_adj_transmission.py ..........                 [100%]
+
+=============================== warnings summary ===============================
+tests/test_gr_classification.py::test_no_surface_is_classified_gr_without_a_ground_boundary
+tests/test_gr_classification.py::test_no_surface_is_classified_gr_without_a_ground_boundary
+tests/test_latent_gating.py::test_latent_cooling_only_in_plant_on_hours
+tests/test_sankey_closure_adj_transmission.py::test_every_party_surface_has_a_transmission_line_item
+  /home/user/AIB/pybuildingenergy/src/pybuildingenergy/source/utils.py:4455: RuntimeWarning: divide by zero encountered in divide
+    Theta_gr_ve = internal_temperature_by_month - (
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================= 198 passed, 4 warnings in 240.42s (0:04:00) ==================
+===== the three named files, verbatim, per-assertion =====
+============================= test session starts ==============================
+collecting ... collected 35 items
+
+tests/test_sankey_closure_adj_transmission.py::test_every_party_surface_has_a_transmission_line_item PASSED [  2%]
+tests/test_sankey_closure_adj_transmission.py::test_party_surfaces_are_typed_adj_not_ground PASSED [  5%]
+tests/test_sankey_closure_adj_transmission.py::test_adjacent_transmission_is_non_zero_and_signed_both_ways PASSED [  8%]
+tests/test_sankey_closure_adj_transmission.py::test_sankey_transmission_matches_independent_per_surface_integration PASSED [ 11%]
+tests/test_sankey_closure_adj_transmission.py::test_v2_residual_under_tolerance PASSED [ 14%]
+tests/test_sankey_closure_adj_transmission.py::test_engine_reported_closure_matches_recomputation PASSED [ 17%]
+tests/test_sankey_closure_adj_transmission.py::test_no_republished_residual_flow PASSED [ 20%]
+tests/test_sankey_closure_adj_transmission.py::test_ground_floor_reports_a_non_zero_ground_flow PASSED [ 22%]
+tests/test_sankey_closure_adj_transmission.py::test_ground_is_not_counted_twice PASSED [ 25%]
+tests/test_sankey_closure_adj_transmission.py::test_ground_floor_balance_also_closes PASSED [ 28%]
+tests/test_latent_gating.py::test_latent_cooling_only_in_plant_on_hours PASSED [ 31%]
+tests/test_latent_gating.py::test_latent_charged_with_cooling_off_is_zero PASSED [ 34%]
+tests/test_latent_gating.py::test_no_latent_cooling_while_the_heating_plant_runs PASSED [ 37%]
+tests/test_latent_gating.py::test_gate_actually_removed_the_bulk_of_the_ungated_term PASSED [ 40%]
+tests/test_latent_gating.py::test_monthly_latent_cooling_keeps_southern_hemisphere_phase PASSED [ 42%]
+tests/test_latent_gating.py::test_latent_heating_stays_negligible PASSED [ 45%]
+tests/test_latent_gating.py::test_total_need_is_reported_with_an_explicit_split PASSED [ 48%]
+tests/test_latent_gating.py::test_annual_latent_matches_the_gated_hourly_series PASSED [ 51%]
+tests/test_gr_classification.py::test_classifier[surf0-OP] PASSED        [ 54%]
+tests/test_gr_classification.py::test_classifier[surf1-ADJ] PASSED       [ 57%]
+tests/test_gr_classification.py::test_classifier[surf2-GR] PASSED        [ 60%]
+tests/test_gr_classification.py::test_classifier[surf3-GR] PASSED        [ 62%]
+tests/test_gr_classification.py::test_classifier[surf4-OP] PASSED        [ 65%]
+tests/test_gr_classification.py::test_classifier[surf5-W] PASSED         [ 68%]
+tests/test_gr_classification.py::test_classifier[surf6-ADJ] PASSED       [ 71%]
+tests/test_gr_classification.py::test_classifier[surf7-AD] PASSED        [ 74%]
+tests/test_gr_classification.py::test_classifier[surf8-ADJ] PASSED       [ 77%]
+tests/test_gr_classification.py::test_classifier[surf9-AD] PASSED        [ 80%]
+tests/test_gr_classification.py::test_zero_sky_view_alone_never_means_ground PASSED [ 82%]
+tests/test_gr_classification.py::test_validator_warns_on_ambiguous_zero_sky_view_surface PASSED [ 85%]
+tests/test_gr_classification.py::test_validator_is_quiet_for_declared_surfaces PASSED [ 88%]
+tests/test_gr_classification.py::test_no_surface_is_classified_gr_without_a_ground_boundary PASSED [ 91%]
+tests/test_gr_classification.py::test_config_a_and_config_b_classify_identically PASSED [ 94%]
+tests/test_gr_classification.py::test_config_a_and_config_b_converge PASSED [ 97%]
+tests/test_gr_classification.py::test_config_a_no_longer_reproduces_the_buried_slab_result PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_sankey_closure_adj_transmission.py::test_every_party_surface_has_a_transmission_line_item
+tests/test_latent_gating.py::test_latent_cooling_only_in_plant_on_hours
+tests/test_gr_classification.py::test_no_surface_is_classified_gr_without_a_ground_boundary
+tests/test_gr_classification.py::test_no_surface_is_classified_gr_without_a_ground_boundary
+  /home/user/AIB/pybuildingenergy/src/pybuildingenergy/source/utils.py:4455: RuntimeWarning: divide by zero encountered in divide
+    Theta_gr_ve = internal_temperature_by_month - (
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 35 passed, 4 warnings in 167.77s (0:02:47) ==================
+exit code of the three-file run: 0
