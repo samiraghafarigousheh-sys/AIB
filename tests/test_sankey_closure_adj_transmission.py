@@ -39,7 +39,12 @@ from apt305_building import build_bui  # noqa: E402
 from pybuildingenergy.source.check_input import sanitize_and_validate_BUI  # noqa: E402
 from pybuildingenergy.source.utils import ISO52016  # noqa: E402
 
-EPW = str(REPO_ROOT / "weather_cache" / "AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw")
+from weather_melbourne import CANONICAL_EPW  # noqa: E402
+
+# The case-study weather file, named in one place (``examples/weather_melbourne.py``)
+# so a test can never quietly run on the superseded Melbourne Regional Office
+# file, whose wind column has four dead-calm months.
+EPW = str(REPO_ROOT / "weather_cache" / CANONICAL_EPW)
 
 RESIDUAL_KEY = "Transmission (residual)"
 V2_TOLERANCE_PCT = 5.0

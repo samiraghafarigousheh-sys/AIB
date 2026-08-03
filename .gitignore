@@ -15,6 +15,7 @@ results/*
 !results/au_corrections_summary/
 !results/au_corrections_closed/
 !results/au_canonical/
+!results/au_canonical_essendon/
 !results/diagnostics/
 !results/tests/
 
@@ -22,4 +23,11 @@ results/*
 # every harness must run on the SAME weather, and a file that has to be fetched
 # first is a file two runs can disagree about.
 weather_cache/*
+!weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw
+#
+# The superseded Melbourne Regional Office file stays committed too, and
+# deliberately: four months of its wind column are identically 0.0 m/s, and the
+# before/after wind diagnostic that justifies replacing it has to be able to
+# read both files. `weather_melbourne.CANONICAL_EPW` and the wind-column
+# preflight are what stop it being picked up by accident.
 !weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw

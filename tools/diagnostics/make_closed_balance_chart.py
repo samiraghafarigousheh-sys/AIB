@@ -30,7 +30,7 @@ V2_TOLERANCE_PCT = 5.0
 PANELS = [
     ("Q_H_sensible_kWh",     "Sensible heating",                 "kWh"),
     ("Q_C_sensible_kWh",     "Sensible cooling",                 "kWh"),
-    ("Q_need_total_kWh",     "Total energy need (sensible + gated latent)", "kWh"),
+    ("__sens_plus_gated_latent", "Total energy need (sensible + gated latent)", "kWh"),
     ("Q_C_latent_kWh",       "Latent cooling — gated to plant-on hours", "kWh"),
     ("Q_ve_loss_kWh",        "Ventilation + infiltration loss",  "kWh"),
     ("__residual_pct",       "V2 Sankey closure residual",       "% of inputs"),
@@ -65,6 +65,10 @@ def main() -> None:
     ap.add_argument("--canonical-state", default=None,
                     help="state whose per-area figure is annotated as canonical "
                          "(default: the last state)")
+    ap.add_argument("--weather-label", default=None,
+                    help="weather file named in the subtitle. Defaults to the "
+                         "filename recorded in the raw JSON's meta block, so the "
+                         "chart cannot claim a weather file the run did not use.")
     args = ap.parse_args()
 
     import matplotlib
@@ -78,10 +82,27 @@ def main() -> None:
     area = float(results[states[0]]["config_B"]["net_floor_area_m2"])
     colors = [SERIES_COLORS[i % len(SERIES_COLORS)] for i in range(len(states))]
 
+    # Taken from the run's own metadata rather than typed into the chart: a
+    # subtitle that names a weather file the run did not use is worse than no
+    # subtitle at all, and that is exactly how the superseded figures were
+    # labelled correctly while resting on a corrupt wind column.
+    weather_label = args.weather_label or Path(
+        blob.get("meta", {}).get("weather", "")).name or "weather file not recorded"
+    canon = args.canonical_state if args.canonical_state in states else states[-1]
+
     def value(state: str, key: str) -> float:
         r = results[state]["config_B"]
         if key == "__residual_pct":
             return float(r["sankey"]["residual_pct"])
+        if key == "__sens_plus_gated_latent":
+            # Computed rather than taken from ``Q_need_total_kWh``, which is the
+            # engine's own total and additionally carries latent *heating* — 153
+            # kWh of phantom humidification on the states before the latent fix,
+            # 0.00 after it. Plotting that under a panel titled "sensible + gated
+            # latent" would mislabel the first five bars by the size of a term the
+            # trajectory exists to remove.
+            return float(r["Q_H_sensible_kWh"] + r["Q_C_sensible_kWh"]
+                         + r["Q_C_latent_kWh"])
         v = r.get(key)
         return float("nan") if v is None else float(v)
 
@@ -149,8 +170,8 @@ def main() -> None:
             ax.spines[side].set_visible(False)
         ax.spines["bottom"].set_color(GRID)
 
-        if key in ("Q_H_sensible_kWh", "Q_C_sensible_kWh", "Q_need_total_kWh"):
-            canon = args.canonical_state if args.canonical_state in states else states[-1]
+        if key in ("Q_H_sensible_kWh", "Q_C_sensible_kWh",
+                   "__sens_plus_gated_latent"):
             v = vals[states.index(canon)]
             if v == v:
                 ax.text(0.985, 0.94, f"{canon}: {v / area:,.2f} kWh/m²·yr",
@@ -169,8 +190,8 @@ def main() -> None:
                  fontweight="semibold")
     fig.text(0.008, 0.949,
              f"ISO 52016-1, ideal loads · {area:.0f} m² · 5 adjacent zones · "
-             f"1.62 m² west-facing single glazing · "
-             f"AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw",
+             f"1.62 m² west-facing single glazing · weather: {weather_label} · "
+             f"final state “{canon}” is canonical",
              fontsize=9, color=TEXT_SECONDARY, ha="left")
     fig.text(0.008, 0.921, args.note,
              fontsize=8.5, color=TEXT_SECONDARY, ha="left", style="italic")

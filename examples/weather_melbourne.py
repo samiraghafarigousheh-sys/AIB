@@ -19,12 +19,30 @@ it will not let a wrong-city EPW through silently.
 Resolution order
 ----------------
 1. An explicit ``--weather`` EPW, **validated** against the building coordinates.
-2. A cached Melbourne EPW under ``weather_cache/``.
-3. Download a Melbourne EPW from a list of mirrors.
-4. PVGIS TMY at the building's own lat/lon (needs network; site-correct).
+2. The canonical cached EPW (``CANONICAL_EPW``) under ``weather_cache/``.
+3. Any other cached Melbourne EPW under ``weather_cache/``.
+4. Download a Melbourne EPW from a list of mirrors.
+5. PVGIS TMY at the building's own lat/lon (needs network; site-correct).
 
 If none is available the caller is told plainly, rather than being handed some
 other city's climate.
+
+THE WIND COLUMN IS SCREENED, NOT ASSUMED
+----------------------------------------
+Site-correctness is necessary and was never sufficient. The Melbourne Regional
+Office file this case study previously used sits 0.008 deg from the building --
+it passed every check here -- and four whole months of its wind column were
+identically 0.0 m/s, because the station's record ends in 2014. Correction C2
+(``h_ce = 4v + 4``) collapses to 4 W/(m2 K) at v = 0, so those fabricated calms
+tripled sensible cooling.
+
+So resolution now also runs the wind-column preflight in
+``tools/diagnostics/weather_integrity.py``, and a file with a dead-calm month is
+refused outright rather than silently producing an indefensible cooling figure.
+The canonical station is Essendon Fields (WMO 958660, ~8 km NW of the building,
+complete continuous record); the RO file is deliberately kept in
+``weather_cache/`` so the before/after contrast can still be drawn, and the
+preflight is what stops it being picked up by accident.
 """
 
 from __future__ import annotations
@@ -36,6 +54,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = REPO_ROOT / "weather_cache"
+
+# The case-study weather file. Named rather than discovered, because
+# ``weather_cache/`` also holds the superseded Melbourne Regional Office file and
+# "whichever EPW sorts first" is not a provenance anyone can defend in a paper.
+CANONICAL_EPW = "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
+
+# The file CANONICAL_EPW replaces, kept for the wind before/after contrast.
+SUPERSEDED_EPW = "AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw"
 
 # Apt 305, 50 Barry St, Carlton
 MELBOURNE_LAT = -37.800
@@ -219,15 +245,42 @@ def download_melbourne_epw(dest_dir: Path = CACHE_DIR, timeout: int = 90) -> Pat
     )
 
 
+def wind_screen(path: Path, quiet: bool = False):
+    """Run the EPW wind-column preflight. Raises on a degenerate column.
+
+    Imported lazily and by path: ``tools/`` is not a package and this module is
+    imported by scripts run from several working directories.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "aib_weather_integrity",
+        REPO_ROOT / "tools" / "diagnostics" / "weather_integrity.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.assert_usable(path, quiet=quiet)
+
+
 def find_cached_epw(dest_dir: Path = CACHE_DIR) -> Path | None:
-    """Return a cached EPW that passes the site check, if one exists."""
+    """Return a cached EPW that passes the site *and* wind-column checks.
+
+    ``CANONICAL_EPW`` is tried first by name. Falling back to "whichever file
+    sorts first" is kept only so a fresh clone with a downloaded file still
+    works -- but a file whose wind column is degenerate is skipped rather than
+    returned, which is what keeps the superseded RO file (still present, for the
+    before/after contrast) from being picked up silently.
+    """
     if not dest_dir.is_dir():
         return None
-    for path in sorted(dest_dir.glob("*.epw")):
+    candidates = sorted(dest_dir.glob("*.epw"),
+                        key=lambda p: (p.name != CANONICAL_EPW, p.name))
+    for path in candidates:
         try:
             validate_epw_site(path, strict=True)
+            wind_screen(path, quiet=True)
             return path
-        except Exception:
+        except Exception as exc:
+            print(f"  skipping cached {path.name}: {str(exc).strip().splitlines()[0]}")
             continue
     return None
 
@@ -279,20 +332,27 @@ def _pvgis_or_raise(context: str) -> tuple[str, None, str]:
 
 
 def resolve(weather: str | None, weather_source: str,
-            allow_site_mismatch: bool = False) -> tuple[str, str | None, str]:
+            allow_site_mismatch: bool = False,
+            screen_wind: bool = True) -> tuple[str, str | None, str]:
     """
     Decide how this run gets its weather.
 
     Returns (weather_source, path_or_None, human_readable_label).
+
+    ``screen_wind`` runs the wind-column preflight on an explicitly-passed EPW
+    and refuses a degenerate one. Set it False only to *study* a bad file (the
+    wind diagnostic's before/after contrast), never to produce a result.
     """
     if weather_source == "pvgis":
         return _pvgis_or_raise("PVGIS was requested explicitly.")
 
     if weather:
-        path = Path(weather)
+        path = Path(weather).resolve()
         if not path.is_file():
             raise WeatherUnavailable(f"weather file not found: {path}")
         lat, lon, city = validate_epw_site(path, strict=not allow_site_mismatch)
+        if screen_wind:
+            wind_screen(path)
         return ("epw", str(path), f"{path.name} — {city} (lat {lat:.2f}, lon {lon:.2f})")
 
     cached = find_cached_epw()
@@ -313,7 +373,8 @@ def resolve(weather: str | None, weather_source: str,
 
 def resolve_and_record(weather: str | None, weather_source: str,
                        allow_site_mismatch: bool, outdir: Path,
-                       require_epw: bool = False) -> tuple[str, str | None, str]:
+                       require_epw: bool = False,
+                       screen_wind: bool = True) -> tuple[str, str | None, str]:
     """
     Resolve the weather AND record what was chosen next to the results.
 
@@ -335,7 +396,8 @@ def resolve_and_record(weather: str | None, weather_source: str,
     """
     import json
 
-    source, path, label = resolve(weather, weather_source, allow_site_mismatch)
+    source, path, label = resolve(weather, weather_source, allow_site_mismatch,
+                                  screen_wind=screen_wind)
     if require_epw and source != "epw":
         raise WeatherUnavailable(
             "This run requires an EPW file and PVGIS was selected instead.\n"
@@ -352,6 +414,19 @@ def resolve_and_record(weather: str | None, weather_source: str,
         lat, lon, city = read_epw_site(Path(path))
         meta.update(station=city, latitude=lat, longitude=lon,
                     site_offset_deg=round(site_offset_deg(lat, lon), 3))
+        # The wind column is part of the provenance, not a detail: the previous
+        # canonical run was site-correct and still unusable.
+        try:
+            w = wind_screen(Path(path), quiet=True)
+            meta["wind"] = {
+                "mean_ms": round(w["mean_wind_ms"], 3),
+                "pct_hours_exactly_zero": round(w["pct_hours_exactly_zero"], 3),
+                "pct_hours_above_4ms": round(w["pct_hours_above_pivot"], 3),
+                "dead_calm_months": w["degenerate_months"],
+                "screened": True,
+            }
+        except Exception as exc:
+            meta["wind"] = {"screened": False, "error": str(exc).strip().splitlines()[0]}
     (outdir / "run_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return source, path, label
 
