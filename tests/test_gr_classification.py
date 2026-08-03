@@ -40,7 +40,12 @@ from pybuildingenergy.source.utils import (  # noqa: E402
     _classify_iso52016_element,
 )
 
-EPW = str(REPO_ROOT / "weather_cache" / "AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw")
+from weather_melbourne import CANONICAL_EPW  # noqa: E402
+
+# The case-study weather file, named in one place (``examples/weather_melbourne.py``)
+# so a test can never quietly run on the superseded Melbourne Regional Office
+# file, whose wind column has four dead-calm months.
+EPW = str(REPO_ROOT / "weather_cache" / CANONICAL_EPW)
 
 COMPARE_KEYS = [
     "Q_H_annual_kWh",

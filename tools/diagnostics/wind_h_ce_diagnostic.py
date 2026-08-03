@@ -19,6 +19,22 @@ The plan's three candidate readings were:
   (c) neither, in which case the increase is not explained by the wind
       distribution and the implementation must be re-examined -- escalate.
 
+WHY THIS IS BEING RE-RUN
+------------------------
+The first pass, on AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw, returned (c):
+96 % of the C2 cooling increase came from hours whose wind read exactly 0.0 m/s,
+and four whole months of that column -- Jan, Mar, Jul, Sep, 33.7 % of the year --
+were identically zero because the Melbourne Regional Office station's record ends
+in 2014. That is missing data, not calm, and at v = 0 the model gives
+h_ce = 4 W/(m2 K) against the ISO constant's 20: a five-fold *weakening* of the
+external film, which raised the sol-air temperature of the exposed west wall and
+manufactured cooling hours.
+
+Verdict (c) was therefore a finding about the weather file, not about the
+correlation, and it was left open. This re-run is on Essendon Fields (WMO 958660,
+~8 km NW of the Carlton site, complete continuous record, no dead-calm month),
+which is what lets the question finally be answered on the physics.
+
 WHAT THIS TOOL DOES
 -------------------
 1. Characterises the EPW wind column: annual distribution against the pivot,
@@ -36,8 +52,8 @@ WHAT THIS TOOL DOES
 Usage
 -----
     python tools/diagnostics/wind_h_ce_diagnostic.py \\
-        --weather weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw \\
-        --outdir results/diagnostics
+        --weather weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw \\
+        --outdir results/diagnostics --tag essendon
 """
 
 from __future__ import annotations
@@ -65,6 +81,20 @@ BLUE = "#2a78d6"
 ORANGE = "#eb6834"
 PIVOT_C = "#c2255c"
 BAD = "#c2255c"
+
+
+def _pct(v: float, nd: int = 1) -> str:
+    """Format a share, snapping a rounding-negative zero to plain zero.
+
+    Band shares are taken against the *signed* total, so when the total change is
+    negative a band contributing +0.0001 kWh formats as "-0.0 %", which reads as
+    a real negative rather than as nothing.
+    """
+    if v != v:
+        return "n/a"
+    if abs(v) < 0.5 * 10 ** (-nd):
+        v = 0.0
+    return f"{v:.{nd}f} %"
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +219,23 @@ def summarise(d: dict) -> dict:
         s["mean_wind_added_hours"] = float(np.nanmean(w[added]))
         s["pct_zero_added_hours"] = float(100.0 * np.mean(w[added] == 0.0))
     s["wind_ratio_cooling_to_annual"] = s["mean_wind_cooling_dyn"] / s["mean_wind_annual"]
+
+    # How much of the delta comes from *genuine* wind, i.e. everything except the
+    # exactly-zero bucket. On the RO file this was 4 %; it is the number the
+    # earlier open finding turns on, so it is computed rather than inferred from
+    # the table.
+    zero_kwh = next(b["extra_cooling_kWh"] for b in s["bands"] if b["label"] == "exactly 0")
+    s["extra_cooling_zero_wind_kWh"] = zero_kwh
+    s["extra_cooling_nonzero_wind_kWh"] = total_extra - zero_kwh
+    s["pct_extra_from_nonzero_wind"] = (
+        100.0 * (total_extra - zero_kwh) / total_extra if total_extra else float("nan"))
+
+    # Do the cooling hours actually sit above the pivot? The direct form of the
+    # question, rather than inferring it from a mean.
+    s["pct_cooling_hours_above_pivot"] = (
+        float(100.0 * np.mean(w[cool_d] > PIVOT_MS)) if cool_d.any() else float("nan"))
+    s["mean_h_ce_cooling"] = (
+        float(np.nanmean(4.0 * w[cool_d] + 4.0)) if cool_d.any() else float("nan"))
     return s
 
 
@@ -196,7 +243,7 @@ def summarise(d: dict) -> dict:
 # Figure
 # ---------------------------------------------------------------------------
 
-def make_figure(d: dict, s: dict, out_png: Path) -> None:
+def make_figure(d: dict, s: dict, out_png: Path, weather_name: str = "") -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -280,6 +327,16 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
                 f"wind identically 0.0 for every hour",
                 transform=ax.transAxes, ha="center", va="top", fontsize=8.5,
                 color=BAD, fontweight="semibold")
+    else:
+        # Stated, not left to be inferred from the absence of red bars: this panel
+        # is the direct check that the RO file's defect has not recurred.
+        worst_m = max(range(1, 13), key=lambda m: s["months"][m]["zero_share"])
+        ax.text(0.5, 0.97,
+                f"no zeroed month — worst exact-zero share is "
+                f"{calendar.month_abbr[worst_m]}, "
+                f"{100 * s['months'][worst_m]['zero_share']:.1f} %",
+                transform=ax.transAxes, ha="center", va="top", fontsize=8.5,
+                color="#1baf7a", fontweight="semibold")
 
     # 4 -- month x hour ------------------------------------------------------
     ax = axes[1, 0]
@@ -297,7 +354,11 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
     ax.set_yticks(range(1, 13)); ax.set_yticklabels(MONTHS, fontsize=7)
     ax.tick_params(labelsize=8, colors=TEXT_SECONDARY, length=0)
     if dead:
-        ax.text(0.5, 0.03, "the four flat dark rows are the zeroed months",
+        ax.text(0.5, 0.03, f"the {len(dead)} flat dark rows are the zeroed months",
+                transform=ax.transAxes, ha="center", va="bottom", fontsize=8,
+                color="#ffffff", style="italic", zorder=6)
+    else:
+        ax.text(0.5, 0.03, "no flat dark row — every month carries a diurnal cycle",
                 transform=ax.transAxes, ha="center", va="bottom", fontsize=8,
                 color="#ffffff", style="italic", zorder=6)
 
@@ -316,7 +377,8 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
     ax.text(0.98, 0.55,
             f"cooling-on mean {s['mean_wind_cooling_dyn']:.2f} m/s\n"
             f"vs annual {s['mean_wind_annual']:.2f} m/s\n"
-            f"{s['pct_zero_cooling_dyn']:.0f} % of them exactly zero",
+            f"{s['pct_cooling_hours_above_pivot']:.0f} % of them above the pivot\n"
+            f"{s['pct_zero_cooling_dyn']:.1f} % of them exactly zero",
             transform=ax.transAxes, ha="right", va="top", fontsize=8.5, color=TEXT_PRIMARY)
 
     # 6 -- the decisive panel -------------------------------------------------
@@ -329,7 +391,7 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
     # Labels always sit above the zero line: the negative bar is tiny, and a label
     # hung beneath it collides with the tick labels.
     for i, (v, b) in enumerate(zip(vals, s["bands"])):
-        ax.annotate(f"{v:+.1f} kWh\n{b['share_pct']:.0f} %", xy=(i, max(v, 0.0)),
+        ax.annotate(f"{v:+.1f} kWh\n{_pct(b['share_pct'], 0)}", xy=(i, max(v, 0.0)),
                     xytext=(0, 5), textcoords="offset points",
                     ha="center", va="bottom", fontsize=8.5,
                     color=TEXT_PRIMARY, zorder=5)
@@ -340,7 +402,8 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
     ax.set_ylim(min(min(vals) * 1.6, -2.0), max(vals) * 1.42 + 2)
     ax.text(0.5, 0.60,
             f"total {s['delta_C']:+.2f} kWh  ({s['C_fix']:.2f} → {s['C_dyn']:.2f})\n"
-            f"if the high-wind branch drove this, it would sit in the last bar",
+            f"{s['pct_extra_from_nonzero_wind']:.0f} % of it from genuine "
+            f"(non-zero) wind bands",
             transform=ax.transAxes, ha="center", va="top", fontsize=8.5,
             color=TEXT_PRIMARY, style="italic")
 
@@ -350,7 +413,7 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
     fig.text(0.008, 0.948,
              "C2 replaces the ISO fixed external convective coefficient with h_ce = 4v + 4. "
              "Pivot at v = 4 m/s, where 4v + 4 = 20 W/(m²·K) = the fixed value. "
-             "· AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw",
+             + (f"· {weather_name}" if weather_name else ""),
              fontsize=9, color=TEXT_SECONDARY, ha="left")
     fig.text(0.008, 0.921,
              "Panels 1–4 characterise the weather column; panel 6 is the controlled experiment — "
@@ -367,7 +430,22 @@ def make_figure(d: dict, s: dict, out_png: Path) -> None:
 # Verdict
 # ---------------------------------------------------------------------------
 
-def write_verdict(s: dict, out_md: Path, png: Path) -> str:
+def load_prior_stats(path: Path) -> dict | None:
+    """The RO-file run's summary, for the before/after contrast.
+
+    Read from the file the earlier verdict was written from, not retyped, so the
+    contrast cannot drift from what was actually published.
+    """
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
+                  prior: dict | None = None) -> str:
     above_band = next(b for b in s["bands"] if b["label"] == "above 4 m/s")
     zero_band = next(b for b in s["bands"] if b["label"] == "exactly 0")
 
@@ -379,39 +457,101 @@ def write_verdict(s: dict, out_md: Path, png: Path) -> str:
 
     dead = sorted(s["degenerate_months"])
     dead_names = ", ".join(calendar.month_abbr[m] for m in dead)
+    # Direction, stated rather than assumed: on a genuinely windy record the
+    # dynamic coefficient sits *above* the ISO constant, which couples the façade
+    # more tightly to outdoor air and can move cooling either way depending on
+    # whether the surface is warmer or cooler than the air it faces.
+    dirn = "increase" if s["delta_C"] > 0 else "reduction"
+    dirn_verb = "raises" if s["delta_C"] > 0 else "lowers"
 
     L: list[str] = []
     add = L.append
-    add("# Wind-speed diagnostic — does the distribution explain the h_ce cooling change?")
+    add("# Wind-speed diagnostic on the clean weather file — does the distribution "
+        "explain the h_ce cooling change?")
     add("")
+    if weather_name:
+        add(f"Weather: `{weather_name}`. This **replaces the earlier verdict (c)**, "
+            "which was reached on `AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw` "
+            "and was a finding about that file's wind column rather than about the "
+            "correlation.")
+        add("")
     add(f"## Verdict: **({verdict})**")
     add("")
     if verdict == "c":
-        add("**Neither (a) nor (b).** The increase is not produced by the high-wind "
-            "branch of `4v + 4` at all, and the cooling hours are not windier than "
-            "the year — they are very much calmer. Escalated below rather than "
-            "papered over.")
+        add("**Neither (a) nor (b).** The change is not produced by the high-wind "
+            "branch of `4v + 4`, and the cooling hours are not windier than the "
+            "year. Escalated below rather than papered over.")
     elif verdict == "a":
-        add("**(a)**: many hours sit above the 4 m/s pivot, so the dynamic "
-            "coefficient exceeds the fixed one on average — more coupling year-round.")
+        add("**(a): many hours sit above the 4 m/s pivot, so the dynamic coefficient "
+            "exceeds the fixed one on average — more coupling year-round.** The "
+            f"C2 cooling change **is** now explained by the real wind distribution: "
+            f"{s['pct_extra_from_nonzero_wind']:.1f} % of it comes from genuine, "
+            f"non-zero wind bands, against 4 % on the file this replaces.")
     elif verdict == "b":
-        add("**(b)**: high winds coincide with the cooling-season hours specifically.")
+        add("**(b): high winds coincide with the cooling-season hours specifically**, "
+            "so the cooling-season coupling is amplified beyond the year-round "
+            "effect.")
     else:
-        add("**(a) and (b) together.**")
+        add("**(a) and (b) together**: the year is windier than the pivot *and* the "
+            "cooling hours are windier still.")
     add("")
     add(f"![wind distribution]({png.name})")
     add("")
 
-    add("## The two headline numbers")
+    # --- the three questions the task asks, answered in order ----------------
+    add("## The three questions, answered")
+    add("")
+    add("| Question | Answer |")
+    add("| --- | --- |")
+    add(f"| Is the C2 cooling change explained by the real wind distribution? | "
+        f"**{'Yes' if verdict != 'c' else 'No'}** — "
+        f"{s['pct_extra_from_nonzero_wind']:.1f} % of the "
+        f"{s['delta_C']:+.2f} kWh comes from hours with genuine, non-zero wind |")
+    add(f"| Do cooling-plant-on hours coincide with above-pivot wind? | "
+        f"**{s['pct_cooling_hours_above_pivot']:.1f} %** of the "
+        f"{s['n_cooling_dyn']} cooling hours are above 4 m/s, against "
+        f"{s['pct_hours_above_pivot']:.1f} % of the year — "
+        + ("they are windier than the year"
+           if s["wind_ratio_cooling_to_annual"] > 1.02 else
+           "about as windy as the year"
+           if s["wind_ratio_cooling_to_annual"] > 0.98 else
+           "they are calmer than the year") + " |")
+    add(f"| How much of the delta comes from genuine (non-zero) wind bands? | "
+        f"**{s['extra_cooling_nonzero_wind_kWh']:+.2f} kWh of "
+        f"{s['total_extra_cooling_kWh']:+.2f} kWh "
+        f"({s['pct_extra_from_nonzero_wind']:.1f} %)**; the exactly-zero bucket "
+        f"contributes {zero_band['extra_cooling_kWh']:+.2f} kWh over "
+        f"{zero_band['hours']:,} hours |")
+    add("")
+
+    add("## The wind column itself")
     add("")
     add("| | |")
     add("| --- | ---: |")
     add(f"| Hours above the 4 m/s pivot | **{s['pct_hours_above_pivot']:.1f} %** of the year |")
     add(f"| Mean wind speed, whole year | **{s['mean_wind_annual']:.2f} m/s** |")
-    add(f"| Mean wind speed, cooling-plant-on hours | "
-        f"**{s['mean_wind_cooling_dyn']:.2f} m/s** — *{s['wind_ratio_cooling_to_annual']:.2f}× "
-        f"the annual mean, i.e. far calmer, not windier* |")
+    add(f"| Median / max | {s['median_wind_annual']:.2f} / {s['max_wind_annual']:.1f} m/s |")
+    add(f"| Hours reading exactly 0.0 m/s | {s['pct_hours_exactly_zero']:.2f} % |")
+    add(f"| Months with a degenerate (all-zero) column | "
+        + (f"**{dead_names}**" if dead else "**none**") + " |")
+    add(f"| Mean h_ce implied over the year | {s['mean_h_ce_annual']:.2f} W/(m²·K), "
+        f"i.e. {s['excess_annual']:+.2f} against the ISO fixed {H_CE_FIXED:.0f} |")
+    add(f"| Mean wind, cooling-plant-on hours | "
+        f"**{s['mean_wind_cooling_dyn']:.2f} m/s** — "
+        f"{s['wind_ratio_cooling_to_annual']:.2f}× the annual mean |")
+    add(f"| Mean h_ce over cooling-plant-on hours | {s['mean_h_ce_cooling']:.2f} W/(m²·K), "
+        f"i.e. {s['excess_cooling']:+.2f} against the fixed value |")
     add("")
+    if not dead:
+        worst_m = max(range(1, 13), key=lambda m: s["months"][m]["zero_share"])
+        add(f"**No calendar month is dead-calm.** The worst exact-zero share is "
+            f"{calendar.month_abbr[worst_m]} at "
+            f"{100 * s['months'][worst_m]['zero_share']:.1f} %, and every month "
+            f"carries a diurnal cycle (panel 4). This is the specific defect that "
+            f"invalidated the previous run, so it is checked directly rather than "
+            f"assumed — and the harness now aborts on it "
+            f"(`tools/diagnostics/weather_integrity.py`).")
+        add("")
 
     add("## The controlled experiment")
     add("")
@@ -427,111 +567,136 @@ def write_verdict(s: dict, out_md: Path, png: Path) -> str:
     add(f"| **change** | **{s['delta_H']:+.2f}** | **{s['delta_C']:+.2f}** | "
         f"**{s['n_cooling_dyn'] - s['n_cooling_fix']:+d}** |")
     add("")
-    add("### Where that cooling comes from, by wind band")
+    add("### Where that cooling change comes from, by wind band")
     add("")
     add("| Wind band | Hours | Extra sensible cooling (kWh) | Share |")
     add("| --- | ---: | ---: | ---: |")
     for b in s["bands"]:
         add(f"| {b['label']} | {b['hours']:,} | {b['extra_cooling_kWh']:+.2f} | "
-            f"{b['share_pct']:.1f} % |")
+            f"{_pct(b['share_pct'])} |")
     add("")
-    add(f"**{zero_band['share_pct']:.1f} % of the increase comes from hours where the "
-        f"wind column reads exactly 0.0 m/s.** The hours above the pivot — where "
-        f"readings (a) and (b) both said the effect should live — contribute "
-        f"{above_band['extra_cooling_kWh']:+.2f} kWh, i.e. very slightly *less* "
-        f"cooling, which is the correct sign for tighter coupling on a façade that "
-        f"is usually warmer than the air it faces.")
+    add("Share is of the **signed** total, so a band moving the same way as the "
+        "total reads positive and a band opposing it reads negative; the four "
+        "shares sum to 100 %. That is why a share can exceed 100 % when another "
+        "band pulls the other way.")
+    add("")
+    add(f"**{s['pct_extra_from_nonzero_wind']:.1f} % of the {s['delta_C']:+.2f} kWh "
+        f"comes from hours with real, non-zero wind**, and the above-pivot band "
+        f"alone carries {above_band['extra_cooling_kWh']:+.2f} kWh "
+        f"({above_band['share_pct']:.1f} %) over {above_band['hours']:,} hours. "
+        f"The exactly-zero bucket — the entire content of the earlier finding — is "
+        f"now {zero_band['hours']:,} hours and "
+        f"{zero_band['extra_cooling_kWh']:+.2f} kWh, "
+        f"{_pct(abs(zero_band['share_pct']))} of the total.")
     add("")
 
-    add("## The actual mechanism")
+    add("## The mechanism")
     add("")
-    add("It is the **low**-wind branch, not the high-wind branch. At v = 0 the model "
-        "gives h_ce = 4 W/(m²·K) against the ISO constant's 20 — a five-fold "
-        "*reduction* in the external film coefficient. Apt 305's only exposed "
-        "surface is a west-facing wall with a solar absorptance of 0.75. Weaken its "
-        "external film on a sunny afternoon and the surface sheds much less heat to "
-        "the air, so its temperature climbs, the sol-air driving temperature climbs "
-        "with it, and more heat is conducted inward. The zone crosses its 26 °C "
-        "cooling setpoint in hours where it previously did not.")
+    add(f"With {s['pct_hours_above_pivot']:.1f} % of hours above the pivot the "
+        f"dynamic coefficient sits **above** the ISO constant for most of the year "
+        f"(mean {s['mean_h_ce_annual']:.2f} against 20 W/(m²·K)), so the exposed "
+        f"west wall is coupled *more* tightly to outdoor air than ISO 13789's "
+        f"frozen value assumes — the opposite of what the RO file produced, where "
+        f"h_ce collapsed to 4 W/(m²·K) across four fabricated dead-calm months.")
     add("")
-    add(f"That is visible in the plant state directly: the wind term adds "
-        f"{s['n_cooling_hours_added']} cooling-plant hours, of which "
-        f"{s.get('pct_zero_added_hours', float('nan')):.0f} % are hours with exactly "
-        f"zero wind (mean {s.get('mean_wind_added_hours', float('nan')):.2f} m/s). The "
-        f"cooling hours are calm *because* the model made them cooling hours — the "
-        f"causality runs from the coefficient to the plant state, not the other way "
-        f"round.")
+    add(f"Apt 305's only exposed surface is that west wall, solar absorptance 0.75. "
+        f"On a sunny afternoon it runs hotter than the air it faces, so a stronger "
+        f"external film sheds more of the absorbed solar back to the air, the "
+        f"sol-air driving temperature falls, and less heat is conducted inward. "
+        f"That is why the wind term {dirn_verb} sensible cooling by "
+        f"{abs(s['delta_C']):.2f} kWh here, and why the {dirn} is concentrated in "
+        f"the bands where the wind actually is.")
     add("")
+    add(f"The plant state moves with it: the wind term changes the cooling-plant "
+        f"hour count by {s['n_cooling_dyn'] - s['n_cooling_fix']:+d} "
+        f"({s['n_cooling_fix']} → {s['n_cooling_dyn']}).")
+    if s.get("n_cooling_hours_added"):
+        add("")
+        add(f"Of the hours the dynamic model adds to the cooling plant "
+            f"({s['n_cooling_hours_added']}), the mean wind is "
+            f"{s.get('mean_wind_added_hours', float('nan')):.2f} m/s and "
+            f"{s.get('pct_zero_added_hours', float('nan')):.1f} % read exactly zero — "
+            f"against 96 % on the RO file, where the added hours *were* the "
+            f"fabricated calms.")
+    add("")
+
+    add("## Month by month")
+    add("")
+    add("| Month | Hours | Zero-wind share | Mean (m/s) | Cooling-plant hours |")
+    add("| --- | ---: | ---: | ---: | ---: |")
+    for m in range(1, 13):
+        v = s["months"][m]
+        mark = " ⚠" if m in dead else ""
+        add(f"| {calendar.month_abbr[m]}{mark} | {v['n']:,} | {100 * v['zero_share']:.1f} % | "
+            f"{v['mean']:.2f} | {v['cooling_hours']} |")
+    add("")
+
+    # --- before/after against the superseded run -----------------------------
+    if prior and "summary" in prior:
+        q = prior["summary"]
+        add("## Before and after: what the weather file was doing")
+        add("")
+        add("Same engine, same building, same switch. The only difference is the "
+            "wind column.")
+        add("")
+        add("| | RO 948680 (superseded) | Essendon 958660 (this run) |")
+        add("| --- | ---: | ---: |")
+        add(f"| Annual mean wind | {q['mean_wind_annual']:.2f} m/s | "
+            f"{s['mean_wind_annual']:.2f} m/s |")
+        add(f"| Hours above the 4 m/s pivot | {q['pct_hours_above_pivot']:.1f} % | "
+            f"{s['pct_hours_above_pivot']:.1f} % |")
+        add(f"| Hours exactly 0.0 m/s | {q['pct_hours_exactly_zero']:.2f} % | "
+            f"{s['pct_hours_exactly_zero']:.2f} % |")
+        add("| Dead-calm months | "
+            + (", ".join(calendar.month_abbr[int(m)] for m in q["degenerate_months"])
+               or "none")
+            + " | " + (dead_names or "none") + " |")
+        add(f"| Sensible cooling, ISO fixed h_ce | {q['C_fix']:,.2f} kWh | "
+            f"{s['C_fix']:,.2f} kWh |")
+        add(f"| Sensible cooling, dynamic 4v + 4 | {q['C_dyn']:,.2f} kWh | "
+            f"{s['C_dyn']:,.2f} kWh |")
+        add(f"| C2 effect on sensible cooling | {q['delta_C']:+,.2f} kWh | "
+            f"{s['delta_C']:+,.2f} kWh |")
+        prior_zero = next((b for b in q["bands"] if b["label"] == "exactly 0"), None)
+        if prior_zero:
+            add(f"| Share of that from exactly-zero wind | "
+                f"{_pct(prior_zero['share_pct'])} | "
+                f"{_pct(zero_band['share_pct'])} |")
+        add(f"| Verdict | (c) — not explained by real wind | "
+            f"({verdict}) |")
+        add("")
+        add("The earlier open finding is therefore closed. It was correct as a "
+            "diagnosis — the RO cooling increase genuinely was not explained by "
+            "real wind — and the fix was the input, not the formula: "
+            "`simplecombined` returns `4 + 4u` and reduces to the ISO constant at "
+            "4 m/s exactly as documented, on both files.")
+        add("")
 
     if dead:
-        add("## Escalation: the wind column is not usable as it stands")
+        add("## Escalation: the wind column is still not usable")
         add("")
-        add(f"Screening the EPW's wind field by month shows that **{dead_names} carry a "
-            f"wind speed of exactly 0.0 m/s for every hour** — "
-            f"{s['degenerate_hours']:,} hours, {100 * s['degenerate_hours'] / s['n_hours']:.1f} % "
-            f"of the year — while the remaining months have a smooth distribution "
-            f"resolved to 0.1 m/s and average {s['mean_wind_live_months']:.2f} m/s.")
-        add("")
-        add("| Month | Hours | Zero-wind share | Mean (m/s) | Cooling-plant hours |")
-        add("| --- | ---: | ---: | ---: | ---: |")
-        for m in range(1, 13):
-            v = s["months"][m]
-            mark = " ⚠" if m in dead else ""
-            add(f"| {calendar.month_abbr[m]}{mark} | {v['n']:,} | {100 * v['zero_share']:.0f} % | "
-                f"{v['mean']:.2f} | {v['cooling_hours']} |")
-        add("")
-        add("A meteorological record does not produce four entire months of exactly "
-            "zero wind between eight months averaging "
-            f"{s['mean_wind_live_months']:.2f} m/s. These are missing or zeroed data, "
-            "not calm. The EPW's own missing-value code for wind speed (999) appears "
-            "nowhere in the file, so the gap is silent: nothing in the file marks "
-            "those hours as absent, and the engine reads them as genuine calms.")
-        add("")
-        cooling_in_dead = sum(s["months"][m]["cooling_hours"] for m in dead)
-        add(f"**This matters directly for the result.** Two of the four zeroed months "
-            f"— January and March — are the peak cooling months, and "
-            f"{cooling_in_dead} of the {s['n_cooling_dyn']} cooling-plant hours fall "
-            f"inside them. Combined with the finding above — that "
-            f"{zero_band['share_pct']:.0f} % of the h_ce cooling increase comes from "
-            f"exactly-zero-wind hours — the conclusion is that the "
-            f"{s['delta_C']:+.2f} kWh is substantially an artefact of the weather "
-            f"file, not a property of the correlation.")
-        add("")
-        add("### What this does *not* say")
-        add("")
-        add("The implementation of `4v + 4` is faithful: `simplecombined` returns "
-            "`4 + 4u`, floored by `external_convection_h_min`, and reduces to the ISO "
-            "constant at 4 m/s exactly as documented. The defect is in the input, not "
-            "the formula. Equally, this does not show the correction is wrong in "
-            "principle — on a wind record with all twelve months present it may well "
-            "behave as the literature expects.")
-        add("")
-        add("### Recommended, not done here")
-        add("")
-        add("Out of scope for this task, and listed rather than actioned:")
-        add("")
-        add("1. Re-source the wind column, or splice those four months from another "
-            "year of the same station, and re-run the controlled experiment above. "
-            "That single number — the change in sensible cooling on a sound wind "
-            "record — is what the paper should defend.")
-        add("2. Until then, **do not present the 20.06 → 67.12 kWh cooling change as a "
-            "physical finding about wind-dependent convection.** With the ISO fixed "
-            f"coefficient the same engine gives {s['C_fix']:.2f} kWh.")
-        add("3. Consider whether the engine should refuse, or at least warn, on a "
-            "weather column with a degenerate month — a silent third of a year at "
-            "exactly zero is the kind of input that should not pass quietly.")
+        add(f"**{dead_names} carry a wind speed of exactly 0.0 m/s for every hour** — "
+            f"{s['degenerate_hours']:,} hours, "
+            f"{100 * s['degenerate_hours'] / s['n_hours']:.1f} % of the year. This is "
+            f"the same defect as the file this run was meant to replace. No cooling "
+            f"figure from this run is defensible.")
         add("")
 
     add("## Effect on the canonical figure")
     add("")
-    add("The canonical result is **unchanged by this diagnostic** and remains "
-        "122.69 kWh sensible heating + 67.12 kWh sensible cooling + 3.98 kWh gated "
-        "latent = 193.79 kWh = 9.69 kWh/m²·yr. This is a diagnosis, not a "
-        "correction: nothing here has been altered in the engine, and the number is "
-        "reported as it stands. What it adds is that the cooling component of that "
-        f"figure carries a {s['delta_C']:.2f} kWh contribution traceable to "
-        "zero-wind hours in months whose wind data is missing, and that needs "
-        "resolving before the h_ce correction is defended in the text.")
+    add("This is a diagnostic, not a correction: nothing in the engine was altered "
+        "to produce it. What it establishes is that the C2 component of the "
+        "canonical trajectory now rests on a wind record that is a wind record — "
+        f"{s['pct_extra_from_nonzero_wind']:.1f} % of the C2 cooling effect comes "
+        f"from genuine wind bands, and the "
+        f"{100 - s['pct_extra_from_nonzero_wind']:.1f} % attributable to "
+        f"exactly-zero hours spans {zero_band['hours']:,} hours "
+        f"({100.0 * zero_band['hours'] / s['n_hours']:.1f} % of the year) rather "
+        f"than four fabricated months.")
+    add("")
+    add("The canonical numbers themselves are in "
+        "`results/au_canonical_essendon/comparison.md`; this file does not restate "
+        "them, so the two cannot drift apart.")
     add("")
     add("Generated by `tools/diagnostics/wind_h_ce_diagnostic.py`.")
 
@@ -544,10 +709,33 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--weather", required=True)
     ap.add_argument("--outdir", default=str(REPO_ROOT / "results/diagnostics"))
+    ap.add_argument("--tag", default="",
+                    help="suffix for the output filenames, e.g. 'essendon' gives "
+                         "wind_distribution_essendon.png / wind_verdict_essendon.md")
+    ap.add_argument("--expect-weather", default=None,
+                    help="substring the weather filename must contain — the guard "
+                         "against silently re-running on a cached file")
+    ap.add_argument("--allow-degenerate", action="store_true",
+                    help="do not abort on a dead-calm month. Only for studying a "
+                         "known-bad file; never for producing a result.")
+    ap.add_argument("--compare-to", default=None,
+                    help="a wind_stats.json from an earlier run, for the "
+                         "before/after contrast")
     args = ap.parse_args()
 
     weather = str(Path(args.weather).resolve())
     outdir = Path(args.outdir)
+    tag = f"_{args.tag}" if args.tag else ""
+
+    # Preflight before the engine runs at all: the resolved absolute path, the
+    # wind column's own numbers, and a hard stop on a dead-calm month.
+    from weather_integrity import assert_usable, format_report, wind_integrity
+    if args.allow_degenerate:
+        w = wind_integrity(Path(weather))
+        print("weather preflight — EPW wind-column integrity  [--allow-degenerate]")
+        print(format_report(w), flush=True)
+    else:
+        assert_usable(Path(weather), expect_name_contains=args.expect_weather)
 
     print("controlled experiment — same engine, only the h_ce model differs:", flush=True)
     d = measure(weather)
@@ -567,18 +755,31 @@ def main() -> None:
               f"{', '.join(calendar.month_abbr[m] for m in s['degenerate_months'])}"
               f" ({s['degenerate_hours']:,} h at exactly 0.0 m/s)")
 
-    png = outdir / "wind_distribution.png"
-    make_figure(d, s, png)
-    verdict = write_verdict(s, outdir / "wind_verdict.md", png)
-    (outdir / "wind_stats.json").write_text(
-        json.dumps({"summary": s, "verdict": verdict}, indent=2, default=str),
+    print(f"  {s['pct_extra_from_nonzero_wind']:.1f} % of the change comes from "
+          f"genuine (non-zero) wind bands")
+    print(f"  {s['pct_cooling_hours_above_pivot']:.1f} % of the {s['n_cooling_dyn']} "
+          f"cooling-plant hours are above the pivot "
+          f"(year: {s['pct_hours_above_pivot']:.1f} %)")
+
+    prior = load_prior_stats(Path(args.compare_to)) if args.compare_to else None
+    if args.compare_to and prior is None:
+        print(f"  NOTE  could not read {args.compare_to}; the before/after contrast "
+              f"is omitted rather than guessed.")
+
+    png = outdir / f"wind_distribution{tag}.png"
+    md = outdir / f"wind_verdict{tag}.md"
+    make_figure(d, s, png, weather_name=Path(weather).name)
+    verdict = write_verdict(s, md, png, weather_name=Path(weather).name, prior=prior)
+    (outdir / f"wind_stats{tag}.json").write_text(
+        json.dumps({"summary": s, "verdict": verdict, "weather": weather},
+                   indent=2, default=str),
         encoding="utf-8")
 
     print(f"\nverdict: ({verdict})")
     print(f"wrote -> {png}")
-    print(f"wrote -> {outdir / 'wind_verdict.md'}")
+    print(f"wrote -> {md}")
     if verdict == "c":
-        print("\nVERDICT (c): the wind distribution does NOT explain the increase by "
+        print("\nVERDICT (c): the wind distribution does NOT explain the change by "
               "the mechanism proposed. See the verdict file — this is escalated, not "
               "papered over.")
 

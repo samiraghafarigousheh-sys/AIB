@@ -1,5 +1,30 @@
 # Diagnostics — findings before the results are finalised
 
+> **The wind finding is closed.** The h_ce diagnostic originally returned verdict
+> **(c)** — the C2 cooling increase was *not* explained by real wind, because
+> 96 % of it came from hours the Melbourne Regional Office EPW recorded as
+> exactly 0.0 m/s across four fabricated dead-calm months. Re-run on the
+> replacement station (Essendon Fields, WMO 958660, complete record) it returns
+> **(a+b)**: 100 % of the C2 effect now comes from genuine non-zero wind bands,
+> and 84.8 % of the cooling-plant hours sit above the 4 m/s pivot against 59.8 %
+> of the year.
+>
+> | | Superseded (RO 948680) | Current (Essendon 958660) |
+> | --- | --- | --- |
+> | Verdict | [`wind_verdict.md`](wind_verdict.md) — **(c)**, weather column unusable | [`wind_verdict_essendon.md`](wind_verdict_essendon.md) — **(a+b)** |
+> | Figure | `wind_distribution.png` | `wind_distribution_essendon.png` |
+> | Stats | `wind_stats.json` | `wind_stats_essendon.json` |
+> | Side-by-side wind integrity | \_ | [`weather_integrity_essendon_vs_ro.json`](weather_integrity_essendon_vs_ro.json) |
+>
+> `wind_verdict.md` and `wind_distribution.png` are **kept, not deleted**: they
+> are the evidence for why the weather file was replaced. Do not quote a number
+> from them as a result.
+>
+> The canonical numbers on the clean file are in
+> [`../au_canonical_essendon/`](../au_canonical_essendon/). Everything below this
+> box was written against the RO file and is retained as the record of how the
+> defect was found.
+
 Five items, run diagnostic-first. **No engine code was modified and no published
 result was overwritten**, except the Item 5 chart, which Item 5 asked to be
 regenerated. Three findings are defects that are logged, not fixed.

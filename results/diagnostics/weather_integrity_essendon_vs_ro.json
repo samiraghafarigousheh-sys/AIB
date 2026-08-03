@@ -1,0 +1,275 @@
+{
+  "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw": {
+    "path": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+    "name": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+    "header": {
+      "city": "Melbourne-Essendon.Fields",
+      "state": "VIC",
+      "country": "AUS",
+      "wmo": "958660",
+      "latitude": -37.7275,
+      "longitude": 144.9067,
+      "timezone": 10.0,
+      "elevation": 79.0
+    },
+    "n_rows": 8760,
+    "n_missing_wind": 0,
+    "mean_wind_ms": 4.840331050228119,
+    "pct_hours_exactly_zero": 1.5753424657534247,
+    "pct_hours_above_pivot": 59.84018264840183,
+    "pivot_ms": 4.0,
+    "max_wind_ms": 18.0,
+    "per_month": {
+      "1": {
+        "name": "Jan",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 1,
+        "zero_share": 0.0013440860215053765,
+        "mean": 5.600537634408599,
+        "max": 13.4
+      },
+      "2": {
+        "name": "Feb",
+        "hours": 672,
+        "hours_present": 672,
+        "zero_hours": 11,
+        "zero_share": 0.01636904761904762,
+        "mean": 4.835267857142831,
+        "max": 11.8
+      },
+      "3": {
+        "name": "Mar",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 5,
+        "zero_share": 0.006720430107526882,
+        "mean": 4.357526881720422,
+        "max": 10.3
+      },
+      "4": {
+        "name": "Apr",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 11,
+        "zero_share": 0.015277777777777777,
+        "mean": 4.164305555555519,
+        "max": 12.9
+      },
+      "5": {
+        "name": "May",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 35,
+        "zero_share": 0.04704301075268817,
+        "mean": 3.7482526881720157,
+        "max": 13.9
+      },
+      "6": {
+        "name": "Jun",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 46,
+        "zero_share": 0.06388888888888888,
+        "mean": 4.19624999999998,
+        "max": 13.4
+      },
+      "7": {
+        "name": "Jul",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 10,
+        "zero_share": 0.013440860215053764,
+        "mean": 5.496908602150523,
+        "max": 12.9
+      },
+      "8": {
+        "name": "Aug",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 8,
+        "zero_share": 0.010752688172043012,
+        "mean": 5.195833333333288,
+        "max": 18.0
+      },
+      "9": {
+        "name": "Sep",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 2,
+        "zero_share": 0.002777777777777778,
+        "mean": 5.490972222222215,
+        "max": 15.4
+      },
+      "10": {
+        "name": "Oct",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 6,
+        "zero_share": 0.008064516129032258,
+        "mean": 4.798387096774184,
+        "max": 12.9
+      },
+      "11": {
+        "name": "Nov",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 2,
+        "zero_share": 0.002777777777777778,
+        "mean": 4.975833333333311,
+        "max": 14.4
+      },
+      "12": {
+        "name": "Dec",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 1,
+        "zero_share": 0.0013440860215053765,
+        "mean": 5.206182795698913,
+        "max": 13.4
+      }
+    },
+    "degenerate_months": [],
+    "degenerate_hours": 0,
+    "usable": true
+  },
+  "AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw": {
+    "path": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw",
+    "name": "AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw",
+    "header": {
+      "city": "Melbourne.RO",
+      "state": "VIC",
+      "country": "AUS",
+      "wmo": "948680",
+      "latitude": -37.8075,
+      "longitude": 144.97,
+      "timezone": 10.0,
+      "elevation": 32.0
+    },
+    "n_rows": 8760,
+    "n_missing_wind": 0,
+    "mean_wind_ms": 2.7079452054794513,
+    "pct_hours_exactly_zero": 33.58447488584475,
+    "pct_hours_above_pivot": 31.038812785388128,
+    "pivot_ms": 4.0,
+    "max_wind_ms": 12.1,
+    "per_month": {
+      "1": {
+        "name": "Jan",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 741,
+        "zero_share": 0.9959677419354839,
+        "mean": 0.008602150537634409,
+        "max": 3.2
+      },
+      "2": {
+        "name": "Feb",
+        "hours": 672,
+        "hours_present": 672,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 3.7688988095238067,
+        "max": 12.1
+      },
+      "3": {
+        "name": "Mar",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 742,
+        "zero_share": 0.9973118279569892,
+        "mean": 0.0009408602150537634,
+        "max": 0.5
+      },
+      "4": {
+        "name": "Apr",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 3.3881944444444456,
+        "max": 9.4
+      },
+      "5": {
+        "name": "May",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 4.755779569892471,
+        "max": 10.9
+      },
+      "6": {
+        "name": "Jun",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 1,
+        "zero_share": 0.001388888888888889,
+        "mean": 3.9534722222222216,
+        "max": 10.6
+      },
+      "7": {
+        "name": "Jul",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 741,
+        "zero_share": 0.9959677419354839,
+        "mean": 0.0059139784946236566,
+        "max": 2.1
+      },
+      "8": {
+        "name": "Aug",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 5.171908602150537,
+        "max": 10.5
+      },
+      "9": {
+        "name": "Sep",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 717,
+        "zero_share": 0.9958333333333333,
+        "mean": 0.005277777777777778,
+        "max": 2.0
+      },
+      "10": {
+        "name": "Oct",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 3.807392473118273,
+        "max": 9.7
+      },
+      "11": {
+        "name": "Nov",
+        "hours": 720,
+        "hours_present": 720,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 3.90416666666667,
+        "max": 10.9
+      },
+      "12": {
+        "name": "Dec",
+        "hours": 744,
+        "hours_present": 744,
+        "zero_hours": 0,
+        "zero_share": 0.0,
+        "mean": 3.8409946236559094,
+        "max": 10.2
+      }
+    },
+    "degenerate_months": [
+      1,
+      3,
+      7,
+      9
+    ],
+    "degenerate_hours": 2952,
+    "usable": false
+  }
+}

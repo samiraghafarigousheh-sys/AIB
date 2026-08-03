@@ -1,0 +1,139 @@
+{
+  "summary": {
+    "n_hours": 8760,
+    "mean_wind_annual": 4.840331050228311,
+    "median_wind_annual": 4.6,
+    "max_wind_annual": 18.0,
+    "pct_hours_above_pivot": 59.84018264840183,
+    "pct_hours_exactly_zero": 1.5753424657534247,
+    "mean_h_ce_annual": 23.361324200913245,
+    "excess_annual": 3.361324200913245,
+    "months": {
+      "1": {
+        "n": 744,
+        "mean": 5.600537634408602,
+        "zero_share": 0.0013440860215053765,
+        "cooling_hours": 18
+      },
+      "2": {
+        "n": 672,
+        "mean": 4.835267857142857,
+        "zero_share": 0.01636904761904762,
+        "cooling_hours": 3
+      },
+      "3": {
+        "n": 744,
+        "mean": 4.35752688172043,
+        "zero_share": 0.006720430107526882,
+        "cooling_hours": 3
+      },
+      "4": {
+        "n": 720,
+        "mean": 4.164305555555556,
+        "zero_share": 0.015277777777777777,
+        "cooling_hours": 0
+      },
+      "5": {
+        "n": 744,
+        "mean": 3.748252688172044,
+        "zero_share": 0.04704301075268817,
+        "cooling_hours": 0
+      },
+      "6": {
+        "n": 720,
+        "mean": 4.19625,
+        "zero_share": 0.06388888888888888,
+        "cooling_hours": 0
+      },
+      "7": {
+        "n": 744,
+        "mean": 5.496908602150538,
+        "zero_share": 0.013440860215053764,
+        "cooling_hours": 0
+      },
+      "8": {
+        "n": 744,
+        "mean": 5.195833333333335,
+        "zero_share": 0.010752688172043012,
+        "cooling_hours": 0
+      },
+      "9": {
+        "n": 720,
+        "mean": 5.490972222222222,
+        "zero_share": 0.002777777777777778,
+        "cooling_hours": 0
+      },
+      "10": {
+        "n": 744,
+        "mean": 4.798387096774194,
+        "zero_share": 0.008064516129032258,
+        "cooling_hours": 0
+      },
+      "11": {
+        "n": 720,
+        "mean": 4.975833333333334,
+        "zero_share": 0.002777777777777778,
+        "cooling_hours": 2
+      },
+      "12": {
+        "n": 744,
+        "mean": 5.206182795698925,
+        "zero_share": 0.0013440860215053765,
+        "cooling_hours": 7
+      }
+    },
+    "degenerate_months": [],
+    "degenerate_hours": 0,
+    "mean_wind_live_months": 4.840331050228311,
+    "pct_above_pivot_live_months": 59.84018264840183,
+    "n_cooling_dyn": 33,
+    "n_cooling_fix": 44,
+    "mean_wind_cooling_dyn": 5.736363636363635,
+    "mean_wind_cooling_fix": 6.002272727272726,
+    "pct_zero_cooling_dyn": 0.0,
+    "mean_t_ext_cooling": 32.196969696969695,
+    "excess_cooling": 6.945454545454542,
+    "H_dyn": 172.82318444266642,
+    "C_dyn": 6.341764988898292,
+    "H_fix": 173.27504226710496,
+    "C_fix": 9.612703740348676,
+    "delta_C": -3.2709387514503847,
+    "delta_H": -0.45185782443854805,
+    "bands": [
+      {
+        "label": "exactly 0",
+        "hours": 138,
+        "extra_cooling_kWh": 0.0,
+        "share_pct": -0.0
+      },
+      {
+        "label": "0 \u2013 2 m/s",
+        "hours": 601,
+        "extra_cooling_kWh": 0.0,
+        "share_pct": -0.0
+      },
+      {
+        "label": "2 \u2013 4 m/s",
+        "hours": 2766,
+        "extra_cooling_kWh": 0.232782088446574,
+        "share_pct": -7.116675246314378
+      },
+      {
+        "label": "above 4 m/s",
+        "hours": 5255,
+        "extra_cooling_kWh": -3.5037208398969577,
+        "share_pct": 107.1166752463144
+      }
+    ],
+    "total_extra_cooling_kWh": -3.2709387514503834,
+    "n_cooling_hours_added": 0,
+    "wind_ratio_cooling_to_annual": 1.1851180377617063,
+    "extra_cooling_zero_wind_kWh": 0.0,
+    "extra_cooling_nonzero_wind_kWh": -3.2709387514503834,
+    "pct_extra_from_nonzero_wind": 100.0,
+    "pct_cooling_hours_above_pivot": 84.84848484848484,
+    "mean_h_ce_cooling": 26.94545454545454
+  },
+  "verdict": "a+b",
+  "weather": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
+}

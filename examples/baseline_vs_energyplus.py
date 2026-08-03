@@ -1069,6 +1069,11 @@ def main() -> None:
                     help="path to the energyplus binary")
     ap.add_argument("--weather", default=None, help="Melbourne EPW (validated)")
     ap.add_argument("--weather-source", default="auto", choices=["auto", "epw", "pvgis"])
+    ap.add_argument("--allow-degenerate-wind", action="store_true",
+                    help="accept an EPW whose wind column has a dead-calm "
+                         "month. Only for reproducing a historical run on the "
+                         "superseded Melbourne Regional Office file; the "
+                         "cooling figures it produces are not defensible.")
     ap.add_argument("--allow-site-mismatch", action="store_true")
     ap.add_argument("--adj-mode", default="iso-bztu", choices=["iso-bztu", "fixed"],
                     help="'iso-bztu' (default) makes EnergyPlus reproduce the ISO 13789 "
@@ -1101,6 +1106,7 @@ def main() -> None:
         wsource, wpath, wlabel = resolve_and_record(
             args.weather, args.weather_source, args.allow_site_mismatch,
             args.outdir, require_epw=True,
+            screen_wind=not args.allow_degenerate_wind,
         )
     except WeatherUnavailable as exc:
         print(f"\nERROR  {exc}\n")

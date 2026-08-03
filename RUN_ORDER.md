@@ -1,5 +1,22 @@
 # Process run order
 
+> **The weather file has changed since this document was written, so re-running
+> these commands will not reproduce the numbers below.** They were produced on
+> `AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw`, which was later found to have
+> four calendar months of identically-zero wind (the station's record ends in
+> 2014). The case study now resolves to
+> `AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw`
+> (`CANONICAL_EPW` in `examples/weather_melbourne.py`), and a file with a
+> dead-calm month is refused outright. To reproduce the figures below as
+> historical output, pass both
+> `--weather weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw` and
+> `--allow-degenerate-wind` — the second is required because the first is the
+> file the screen exists to catch.
+>
+> The current canonical numbers, and what they supersede, are in
+> [`results/au_canonical_essendon/`](results/au_canonical_essendon/) — see
+> `SUPERSEDED.md` there.
+
 The four steps, in order, with the commands that produce each one. Every command
 below was run end to end on `AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw`
 (Melbourne Regional Office, 0.008° from the building) and the numbers quoted are

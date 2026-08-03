@@ -435,6 +435,11 @@ def main() -> None:
                     help="'auto' (default): cached Melbourne EPW, else download one, "
                          "else PVGIS. 'pvgis' fetches a TMY for the building's own "
                          "lat/lon and is site-correct by construction.")
+    ap.add_argument("--allow-degenerate-wind", action="store_true",
+                    help="accept an EPW whose wind column has a dead-calm "
+                         "month. Only for reproducing a historical run on the "
+                         "superseded Melbourne Regional Office file; the "
+                         "cooling figures it produces are not defensible.")
     ap.add_argument("--allow-site-mismatch", action="store_true",
                     help="Accept an EPW from another location. Results are then for "
                          "that location, not Melbourne, and are labelled as such.")
@@ -467,6 +472,7 @@ def main() -> None:
         weather_source, weather_path, weather_label = resolve_and_record(
             args.weather, args.weather_source, args.allow_site_mismatch,
             args.outdir, require_epw=args.require_epw,
+            screen_wind=not args.allow_degenerate_wind,
         )
     except WeatherUnavailable as exc:
         print(f"\nERROR  {exc}\n")
