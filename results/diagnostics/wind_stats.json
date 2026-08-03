@@ -1,0 +1,140 @@
+{
+  "summary": {
+    "n_hours": 8760,
+    "mean_wind_annual": 2.7079452054794517,
+    "median_wind_annual": 2.4,
+    "max_wind_annual": 12.1,
+    "pct_hours_above_pivot": 31.038812785388124,
+    "pct_hours_exactly_zero": 33.58447488584475,
+    "mean_h_ce_annual": 14.831780821917807,
+    "excess_annual": -5.168219178082193,
+    "months": {
+      "1": {
+        "n": 744,
+        "mean": 0.008602150537634409,
+        "zero_share": 0.9959677419354839,
+        "cooling_hours": 84
+      },
+      "2": {
+        "n": 672,
+        "mean": 3.7688988095238094,
+        "zero_share": 0.0,
+        "cooling_hours": 11
+      },
+      "3": {
+        "n": 744,
+        "mean": 0.0009408602150537634,
+        "zero_share": 0.9973118279569892,
+        "cooling_hours": 26
+      },
+      "4": {
+        "n": 720,
+        "mean": 3.3881944444444443,
+        "zero_share": 0.0,
+        "cooling_hours": 0
+      },
+      "5": {
+        "n": 744,
+        "mean": 4.755779569892473,
+        "zero_share": 0.0,
+        "cooling_hours": 0
+      },
+      "6": {
+        "n": 720,
+        "mean": 3.953472222222222,
+        "zero_share": 0.001388888888888889,
+        "cooling_hours": 0
+      },
+      "7": {
+        "n": 744,
+        "mean": 0.0059139784946236566,
+        "zero_share": 0.9959677419354839,
+        "cooling_hours": 0
+      },
+      "8": {
+        "n": 744,
+        "mean": 5.171908602150537,
+        "zero_share": 0.0,
+        "cooling_hours": 0
+      },
+      "9": {
+        "n": 720,
+        "mean": 0.005277777777777778,
+        "zero_share": 0.9958333333333333,
+        "cooling_hours": 7
+      },
+      "10": {
+        "n": 744,
+        "mean": 3.8073924731182793,
+        "zero_share": 0.0,
+        "cooling_hours": 2
+      },
+      "11": {
+        "n": 720,
+        "mean": 3.904166666666667,
+        "zero_share": 0.0,
+        "cooling_hours": 6
+      },
+      "12": {
+        "n": 744,
+        "mean": 3.8409946236559143,
+        "zero_share": 0.0,
+        "cooling_hours": 10
+      }
+    },
+    "degenerate_months": [
+      1,
+      3,
+      7,
+      9
+    ],
+    "degenerate_hours": 2952,
+    "mean_wind_live_months": 4.081663223140496,
+    "pct_above_pivot_live_months": 46.81473829201102,
+    "n_cooling_dyn": 146,
+    "n_cooling_fix": 63,
+    "mean_wind_cooling_dyn": 0.6568493150684933,
+    "mean_wind_cooling_fix": 1.4396825396825397,
+    "pct_zero_cooling_dyn": 80.13698630136986,
+    "mean_t_ext_cooling": 29.326712328767123,
+    "excess_cooling": -13.372602739726027,
+    "H_dyn": 122.69192511671778,
+    "C_dyn": 67.12109858922206,
+    "H_fix": 123.42409015096429,
+    "C_fix": 18.395169464978256,
+    "delta_C": 48.725929124243805,
+    "delta_H": -0.7321650342465063,
+    "bands": [
+      {
+        "label": "exactly 0",
+        "hours": 2942,
+        "extra_cooling_kWh": 46.907692908006275,
+        "share_pct": 96.26844218485542
+      },
+      {
+        "label": "0 \u2013 2 m/s",
+        "hours": 937,
+        "extra_cooling_kWh": 1.6598151582946938,
+        "share_pct": 3.4064310073234605
+      },
+      {
+        "label": "2 \u2013 4 m/s",
+        "hours": 2072,
+        "extra_cooling_kWh": 0.6862129737141283,
+        "share_pct": 1.40831172652324
+      },
+      {
+        "label": "above 4 m/s",
+        "hours": 2809,
+        "extra_cooling_kWh": -0.5277919157712988,
+        "share_pct": -1.083184918702132
+      }
+    ],
+    "total_extra_cooling_kWh": 48.725929124243805,
+    "n_cooling_hours_added": 85,
+    "mean_wind_added_hours": 0.19647058823529415,
+    "pct_zero_added_hours": 91.76470588235294,
+    "wind_ratio_cooling_to_annual": 0.24256373937677062
+  },
+  "verdict": "c"
+}
