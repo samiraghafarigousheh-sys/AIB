@@ -1,0 +1,17 @@
+Side,Term,kWh,% of inputs
+input,Internal gains,5356.685952000037,64.495188540434
+input,Heating,1779.3602760664141,21.423726818148413
+input,Solar & free-gain,1169.5127961416376,14.081084641417588
+output,Ventilation (losses),2031.9092286368195,24.464448723011227
+output,Transmission - East wall to corridor,1109.040521262182,13.352990666006685
+output,Transmission - Floor to Apt 205,1057.8229931783515,12.736325033572461
+output,Transmission - Ceiling to Apt 405,1057.8229931783508,12.736325033572452
+output,Transmission - North wall to Apt 306,819.9122274423105,9.871848782875718
+output,Transmission - South wall to Apt 304,819.9122274423097,9.871848782875707
+output,Cooling (extracted energy),640.8369660455512,7.715759579550435
+output,Transmission - West exterior wall (opaque),429.6143082046156,5.172611584029746
+output,Transmission - West window - fixed + West window - operable,334.33299992527736,4.025412364788475
+output,Ground,98.9755020273237,1.1916777875979363
+output,Thermal bridges,2.0969585607584027,0.025247651056917772
+storage,Energy accumulated in the zone,0.0,0.0
+residual,V2 closure residual,-96.71790169576276,-1.164495988937777

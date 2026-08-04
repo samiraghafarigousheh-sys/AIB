@@ -1,0 +1,13 @@
+{
+  "Baseline": {
+    "gate_ok": true,
+    "items_ok": true,
+    "reint_ok": true,
+    "residual_kWh": -96.71790169576276,
+    "residual_pct": -1.164495988937777,
+    "in_sum_kWh": 8305.559024208089,
+    "out_sum_kWh": 8402.27692590385,
+    "storage_kWh": 0.0,
+    "n_transmission_items": 7
+  }
+}

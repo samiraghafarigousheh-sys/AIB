@@ -1,0 +1,415 @@
+{
+  "iso": {
+    "config": "B",
+    "net_floor_area_m2": 20.0,
+    "time_step_h": 1.0,
+    "Q_H_sensible_kWh": 1779.360276066416,
+    "Q_C_sensible_kWh": 640.8369660455513,
+    "Q_C_latent_kWh": 26.12147101507936,
+    "Q_H_latent_kWh": 152.65064609492043,
+    "Q_C_latent_ungated_kWh": 900.051690511355,
+    "Q_H_latent_ungated_kWh": 697.0178345011337,
+    "Q_sensible_total_kWh": 2420.197242111967,
+    "Q_latent_total_kWh": 178.77211710999978,
+    "Q_need_total_kWh": 2598.969359221967,
+    "Q_sensible_total_kWh_per_sqm": 121.00986210559836,
+    "Q_latent_total_kWh_per_sqm": 8.93860585549999,
+    "Q_need_total_kWh_per_sqm": 129.94846796109834,
+    "Q_H_sensible_kWh_per_sqm": 88.9680138033208,
+    "Q_C_sensible_kWh_per_sqm": 32.041848302277565,
+    "n_steps": 8760,
+    "n_steps_cooling_on": 851,
+    "n_steps_heating_on": 2790,
+    "n_steps_latent_charged": 178,
+    "latent_kWh_with_cooling_off": 0.0,
+    "latent_kWh_while_heating": 0.0,
+    "monthly_latent_cooling_kWh": [
+      13.43255597435034,
+      5.243953398860601,
+      2.8921829596743716,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.8205287214743692,
+      3.7322499607196855
+    ],
+    "Q_internal_gains_kWh": 5356.685952,
+    "Q_solar_gains_kWh": 810.5399874668723,
+    "Q_ve_loss_kWh": 2031.9092286368234,
+    "Q_ve_gain_kWh": 79.69288868577316,
+    "Q_tb_loss_kWh": 2.096958560758398,
+    "Q_ground_loss_kWh": 98.97550202732344,
+    "Q_ground_gain_kWh": 2.25760033151989,
+    "Q_tr_total_loss_kWh": 5398.239506491121,
+    "Q_tr_total_gain_kWh": 46.7213113466146,
+    "Q_tr_opaque_loss_kWh": 429.6143082046166,
+    "Q_tr_window_loss_kWh": 334.33299992527725,
+    "Q_tr_adjacent_loss_kWh": 4864.293313066339,
+    "Q_tr_adjacent_gain_kWh": 2.400251232632442,
+    "sankey": {
+      "inputs_Wh": {
+        "Heating": 1779360.276066414,
+        "Internal gains": 5356685.952000037,
+        "Solar & free-gain": 1169512.7961416377
+      },
+      "outputs_Wh": {
+        "Cooling (extracted energy)": 640836.9660455512,
+        "Ventilation (losses)": 2031909.2286368196,
+        "Thermal bridges": 2096.9585607584027,
+        "Ground": 98975.5020273237,
+        "Transmission - West exterior wall (opaque)": 429614.3082046156,
+        "Transmission - North wall to Apt 306": 819912.2274423105,
+        "Transmission - South wall to Apt 304": 819912.2274423097,
+        "Transmission - East wall to corridor": 1109040.521262182,
+        "Transmission - Floor to Apt 205": 1057822.9931783515,
+        "Transmission - Ceiling to Apt 405": 1057822.9931783509,
+        "Transmission - West window - fixed + West window - operable": 334332.99992527737
+      },
+      "republished_residual_Wh": 0.0,
+      "storage_Wh": 0.0,
+      "inputs_total_Wh": 8305559.024208088,
+      "outputs_total_Wh": 8402276.925903851,
+      "residual_Wh": -96717.90169576276,
+      "residual_kWh": -96.71790169576276,
+      "residual_pct": -1.164495988937777,
+      "n_transmission_items": 7,
+      "transmission_items_kWh": {
+        "Transmission - West exterior wall (opaque)": 429.6143082046156,
+        "Transmission - North wall to Apt 306": 819.9122274423105,
+        "Transmission - South wall to Apt 304": 819.9122274423097,
+        "Transmission - East wall to corridor": 1109.040521262182,
+        "Transmission - Floor to Apt 205": 1057.8229931783515,
+        "Transmission - Ceiling to Apt 405": 1057.8229931783508,
+        "Transmission - West window - fixed + West window - operable": 334.33299992527736
+      },
+      "surface_iso_types": {
+        "West exterior wall (opaque)": "OP",
+        "North wall to Apt 306": "ADJ",
+        "South wall to Apt 304": "ADJ",
+        "East wall to corridor": "ADJ",
+        "Floor to Apt 205": "ADJ",
+        "Ceiling to Apt 405": "ADJ",
+        "West window - fixed + West window - operable": "W"
+      },
+      "transmission_reported_kWh": 5628.458270633398,
+      "transmission_independent_kWh": 5628.458270633391,
+      "transmission_rel_diff": 1.1311202120174996e-15
+    }
+  },
+  "energyplus": {
+    "heating_kWh": 1120.2450300632943,
+    "cooling_kWh": 697.163003988648,
+    "warnings": 2,
+    "err_file": "/home/user/AIB/results/paper/validation_iso_vs_ep/ep_run/apt305out.err"
+  },
+  "meta": {
+    "weather": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+    "wind": {
+      "path": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+      "name": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+      "header": {
+        "city": "Melbourne-Essendon.Fields",
+        "state": "VIC",
+        "country": "AUS",
+        "wmo": "958660",
+        "latitude": -37.7275,
+        "longitude": 144.9067,
+        "timezone": 10.0,
+        "elevation": 79.0
+      },
+      "n_rows": 8760,
+      "n_missing_wind": 0,
+      "mean_wind_ms": 4.840331050228119,
+      "pct_hours_exactly_zero": 1.5753424657534247,
+      "pct_hours_above_pivot": 59.84018264840183,
+      "pivot_ms": 4.0,
+      "max_wind_ms": 18.0,
+      "per_month": {
+        "1": {
+          "name": "Jan",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 1,
+          "zero_share": 0.0013440860215053765,
+          "mean": 5.600537634408599,
+          "max": 13.4
+        },
+        "2": {
+          "name": "Feb",
+          "hours": 672,
+          "hours_present": 672,
+          "zero_hours": 11,
+          "zero_share": 0.01636904761904762,
+          "mean": 4.835267857142831,
+          "max": 11.8
+        },
+        "3": {
+          "name": "Mar",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 5,
+          "zero_share": 0.006720430107526882,
+          "mean": 4.357526881720422,
+          "max": 10.3
+        },
+        "4": {
+          "name": "Apr",
+          "hours": 720,
+          "hours_present": 720,
+          "zero_hours": 11,
+          "zero_share": 0.015277777777777777,
+          "mean": 4.164305555555519,
+          "max": 12.9
+        },
+        "5": {
+          "name": "May",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 35,
+          "zero_share": 0.04704301075268817,
+          "mean": 3.7482526881720157,
+          "max": 13.9
+        },
+        "6": {
+          "name": "Jun",
+          "hours": 720,
+          "hours_present": 720,
+          "zero_hours": 46,
+          "zero_share": 0.06388888888888888,
+          "mean": 4.19624999999998,
+          "max": 13.4
+        },
+        "7": {
+          "name": "Jul",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 10,
+          "zero_share": 0.013440860215053764,
+          "mean": 5.496908602150523,
+          "max": 12.9
+        },
+        "8": {
+          "name": "Aug",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 8,
+          "zero_share": 0.010752688172043012,
+          "mean": 5.195833333333288,
+          "max": 18.0
+        },
+        "9": {
+          "name": "Sep",
+          "hours": 720,
+          "hours_present": 720,
+          "zero_hours": 2,
+          "zero_share": 0.002777777777777778,
+          "mean": 5.490972222222215,
+          "max": 15.4
+        },
+        "10": {
+          "name": "Oct",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 6,
+          "zero_share": 0.008064516129032258,
+          "mean": 4.798387096774184,
+          "max": 12.9
+        },
+        "11": {
+          "name": "Nov",
+          "hours": 720,
+          "hours_present": 720,
+          "zero_hours": 2,
+          "zero_share": 0.002777777777777778,
+          "mean": 4.975833333333311,
+          "max": 14.4
+        },
+        "12": {
+          "name": "Dec",
+          "hours": 744,
+          "hours_present": 744,
+          "zero_hours": 1,
+          "zero_share": 0.0013440860215053765,
+          "mean": 5.206182795698913,
+          "max": 13.4
+        }
+      },
+      "degenerate_months": [],
+      "degenerate_hours": 0,
+      "usable": true
+    },
+    "ep_version": "EnergyPlus, Version 24.1.0-9d7789a3ac",
+    "timestep": 6,
+    "adj_mode": "iso-bztu",
+    "closure_commits": [
+      "6e549fa18c04d90c33c5bf29d262947efbf8915d",
+      "82a909d3f3e91108fc374dd86ddc177157330866",
+      "9fd8c696c4bd659b866fdac4afd49217c443ae21",
+      "09357302f5d16ee490d21c58b51c3685f55de972"
+    ],
+    "b_ztu": {
+      "apt_above": 0.926,
+      "apt_below": 0.926,
+      "apt_north": 0.867,
+      "apt_south": 0.867,
+      "corridor": 0.733
+    },
+    "gains_w": {
+      "base_W": 0.0,
+      "occupants_W": 616.14,
+      "appliances_W": 440.0999999999999,
+      "lighting_W": 0.0
+    },
+    "setpoints": {
+      "heating_setpoint": 18.0,
+      "heating_setback": 15.0,
+      "cooling_setpoint": 26.0,
+      "cooling_setback": 28.0,
+      "units": "\u00b0C"
+    },
+    "ventilation": {
+      "ventilation_type": "occupancy",
+      "flow_rate_per_person": 2.0,
+      "units": "l/(s m\u00b2)",
+      "custom_heat_transfer_coefficient_ventilation": null
+    },
+    "internal_gain_full_load": {
+      "occupants": 8.0,
+      "appliances": 5.0,
+      "lighting": 3.0
+    },
+    "adjacent_zone_conditioned": {
+      "apt_above": true,
+      "apt_below": true,
+      "apt_north": true,
+      "apt_south": true,
+      "corridor": true
+    },
+    "party_surface_types": {
+      "North wall to Apt 306": "adjacent",
+      "South wall to Apt 304": "adjacent",
+      "East wall to corridor": "adjacent",
+      "Floor to Apt 205": "adjacent",
+      "Ceiling to Apt 405": "adjacent"
+    },
+    "iso_internal_gains_kWh": 5356.685952,
+    "overhang": {
+      "declared": {
+        "Q_H_annual_kWh": 1779.360276066416,
+        "Q_C_annual_kWh": 640.8369660455513,
+        "Q_solar_gains_kWh": 810.5399874668723
+      },
+      "overhang_stripped": {
+        "Q_H_annual_kWh": 1779.360276066416,
+        "Q_C_annual_kWh": 640.8369660455513,
+        "Q_solar_gains_kWh": 810.5399874668723
+      },
+      "max_abs_diff": 0.0
+    },
+    "trajectory_match_max_abs": 0.0,
+    "prior_validation": {
+      "label": "RO 948680 weather, party surfaces typed `opaque` (buried as GR)",
+      "iso_heating": 15.9,
+      "ep_heating": 766.2,
+      "iso_cooling": 2027.5,
+      "ep_cooling": 900.4,
+      "source": "RUN_ORDER.md, step 1"
+    }
+  },
+  "audit": [
+    {
+      "input": "Weather file",
+      "iso": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+      "ep": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+      "match": true
+    },
+    {
+      "input": "Net floor area",
+      "iso": "20.0 m\u00b2",
+      "ep": "20.0 m\u00b2",
+      "match": true
+    },
+    {
+      "input": "Heating setpoint / setback",
+      "iso": "18.0 / 15.0 \u00b0C",
+      "ep": "18.0 / 15.0 \u00b0C",
+      "match": true
+    },
+    {
+      "input": "Cooling setpoint / setback",
+      "iso": "26.0 / 28.0 \u00b0C",
+      "ep": "26.0 / 28.0 \u00b0C",
+      "match": true
+    },
+    {
+      "input": "Control temperature",
+      "iso": "operative (0.5 air + 0.5 MRT)",
+      "ep": "operative (ZoneControl:Thermostat:OperativeTemperature, 0.5)",
+      "match": true
+    },
+    {
+      "input": "Internal gains",
+      "iso": "probed from the engine: occupants 616.1 W, appliances 440.1 W, lighting 0.0 W",
+      "ep": "OtherEquipment at the probed watts, same hourly profiles",
+      "match": true
+    },
+    {
+      "input": "Internal-gain radiant fraction",
+      "iso": "f_int_c = 0.4 \u2192 0.6 radiant",
+      "ep": "0.6 radiant",
+      "match": true
+    },
+    {
+      "input": "Outdoor air",
+      "iso": "2.0 l/(s\u00b7m\u00b2)",
+      "ep": "DesignSpecification:OutdoorAir Flow/Area 0.002 m\u00b3/(s\u00b7m\u00b2)",
+      "match": true
+    },
+    {
+      "input": "Adjacent surfaces",
+      "iso": "5 party surfaces, ISO 13789 unconditioned buffer (baseline ignores `conditioned: True`)",
+      "ep": "OtherSideCoefficients, N4 = b_ztu, N7 = 1 \u2212 b_ztu (no surface is Outdoors)",
+      "match": true
+    },
+    {
+      "input": "Exposed surfaces",
+      "iso": "west wall + 2 windows only",
+      "ep": "WestWall (Outdoors, SunExposed) + 2 fenestration surfaces",
+      "match": true
+    },
+    {
+      "input": "Window frame fraction",
+      "iso": "0.25 on solar, not on conduction",
+      "ep": "SHGC scaled by 0.75, U unchanged",
+      "match": true
+    },
+    {
+      "input": "Zone internal capacitance",
+      "iso": "c_int = 10 000 J/(m\u00b2\u00b7K)",
+      "ep": "InternalMass, 10 000 J/(m\u00b2\u00b7K) over the floor area",
+      "match": true
+    },
+    {
+      "input": "Plant",
+      "iso": "ideal loads (need, not system)",
+      "ep": "ZoneHVAC:IdealLoadsAirSystem, NoLimit",
+      "match": true
+    },
+    {
+      "input": "Latent handling",
+      "iso": "reported separately, not in sensible",
+      "ep": "ConstantSupplyHumidityRatio (sensible-only cooling)",
+      "match": true
+    },
+    {
+      "input": "Holidays / daylight saving",
+      "iso": "not modelled",
+      "ep": "No / No",
+      "match": true
+    }
+  ]
+}

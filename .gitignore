@@ -16,6 +16,7 @@ results/*
 !results/au_corrections_closed/
 !results/au_canonical/
 !results/au_canonical_essendon/
+!results/paper/
 !results/diagnostics/
 !results/tests/
 
@@ -31,3 +32,9 @@ weather_cache/*
 # read both files. `weather_melbourne.CANONICAL_EPW` and the wind-column
 # preflight are what stop it being picked up by accident.
 !weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw
+
+# EnergyPlus scratch output. The generated IDF and the extracted results are
+# committed (results/paper/validation_iso_vs_ep/apt305.idf and validation_raw.json);
+# the eplusout.* tables, the 30 MB SQLite and the audit files are reproducible
+# noise and are not.
+results/paper/validation_iso_vs_ep/ep_run/

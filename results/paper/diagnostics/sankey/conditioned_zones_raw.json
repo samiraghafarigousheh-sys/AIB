@@ -1,0 +1,26 @@
+{
+  "inputs_kWh": {
+    "Solar & free-gain": 3068.3791358745134,
+    "Internal gains": 730.2911999999955,
+    "Heating": 172.82318444266642
+  },
+  "outputs_kWh": {
+    "Ventilation (losses)": 2359.7368454017133,
+    "Transmission - West exterior wall (opaque)": 442.9290402279205,
+    "Transmission - West window - fixed + West window - operable": 340.0087916228196,
+    "Transmission - Ceiling to Apt 405": 179.33510838968854,
+    "Transmission - Floor to Apt 205": 179.3351083896885,
+    "Transmission - East wall to corridor": 177.22657459333323,
+    "Transmission - South wall to Apt 304": 141.7812596746664,
+    "Transmission - North wall to Apt 306": 141.7812596746663,
+    "Ground": 78.2286445690427,
+    "Cooling (extracted energy)": 6.341764988898292,
+    "Thermal bridges": 1.8102006095732264
+  },
+  "storage_kWh": 0.0,
+  "residual_kWh": -77.02107782483567,
+  "residual_pct": -1.9393479412924872,
+  "n_transmission_items": 7,
+  "transmission_rel_diff": 2.837919132558668e-16,
+  "weather": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
+}

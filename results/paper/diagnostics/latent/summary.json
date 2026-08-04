@@ -1,0 +1,8 @@
+{
+  "latent": {
+    "leak_max_kWh": 0.0,
+    "pass": true,
+    "summer_kWh": 0.7219546459805734,
+    "winter_kWh": 0.0
+  }
+}

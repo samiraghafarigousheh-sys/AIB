@@ -291,7 +291,18 @@ COLUMNS = [
     ("residual_pct", "V2 residual (%)"),
     ("gate", "< 5 %?"),
     ("n_transmission_items", "Transmission items"),
+    ("Q_solar_gains_kWh", "Solar gains (kWh)"),
+    ("Q_internal_gains_kWh", "Internal gains (kWh)"),
+    ("Q_tr_window_loss_kWh", "Window transmission loss (kWh)"),
+    ("Q_tr_opaque_loss_kWh", "Opaque transmission loss (kWh)"),
+    ("Q_tr_total_loss_kWh", "Total transmission loss (kWh)"),
+    ("Q_ve_loss_kWh", "Ventilation + infiltration loss (kWh)"),
 ]
+
+# The columns the Markdown trajectory table shows. The CSV carries all of
+# COLUMNS; the Markdown table would be unreadable at eighteen columns wide, and
+# the envelope decomposition has its own section in the Part 3 tables.
+MD_COLUMNS = 13
 
 
 def flatten(label: str, r: dict) -> dict:
@@ -324,6 +335,20 @@ def flatten(label: str, r: dict) -> dict:
         "monthly_latent_cooling_kWh": b.get("monthly_latent_cooling_kWh"),
         "Q_tr_adjacent_loss_kWh": b.get("Q_tr_adjacent_loss_kWh"),
         "Q_tr_adjacent_gain_kWh": b.get("Q_tr_adjacent_gain_kWh"),
+        # Envelope decomposition. Carried per state so the paper's window/h_ce
+        # and ventilation/latent sub-tables can be derived from this run rather
+        # than from a second harness measuring the same states again — two
+        # harnesses are two chances for the same claim to come out differently.
+        "Q_solar_gains_kWh": b.get("Q_solar_gains_kWh"),
+        "Q_internal_gains_kWh": b.get("Q_internal_gains_kWh"),
+        "Q_tr_window_loss_kWh": b.get("Q_tr_window_loss_kWh"),
+        "Q_tr_opaque_loss_kWh": b.get("Q_tr_opaque_loss_kWh"),
+        "Q_tr_total_loss_kWh": b.get("Q_tr_total_loss_kWh"),
+        "Q_tr_total_gain_kWh": b.get("Q_tr_total_gain_kWh"),
+        "Q_ve_loss_kWh": b.get("Q_ve_loss_kWh"),
+        "Q_ve_gain_kWh": b.get("Q_ve_gain_kWh"),
+        "Q_ground_loss_kWh": b.get("Q_ground_loss_kWh"),
+        "Q_tb_loss_kWh": b.get("Q_tb_loss_kWh"),
     }
 
 
@@ -386,11 +411,12 @@ def write_outputs(rows: list[dict], states: list[dict], engine_check: dict,
 
     add("## 1. The trajectory")
     add("")
-    add("| " + " | ".join(h for _, h in COLUMNS) + " |")
-    add("| --- | " + " | ".join(["---:"] * (len(COLUMNS) - 3)) + " | ---: | :-: | ---: |")
+    md_cols = COLUMNS[:MD_COLUMNS]
+    add("| " + " | ".join(h for _, h in md_cols) + " |")
+    add("| --- | " + " | ".join(["---:"] * (len(md_cols) - 3)) + " | ---: | :-: | ---: |")
     for r in rows:
         cells = [r["state"]]
-        for k, _ in COLUMNS[1:]:
+        for k, _ in md_cols[1:]:
             v = r.get(k)
             if k == "gate":
                 cells.append(str(v))

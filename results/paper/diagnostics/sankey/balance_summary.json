@@ -1,0 +1,46 @@
+{
+  "Baseline": {
+    "gate_ok": true,
+    "items_ok": true,
+    "reint_ok": true,
+    "residual_kWh": -96.71790169576276,
+    "residual_pct": -1.164495988937777,
+    "in_sum_kWh": 8305.559024208089,
+    "out_sum_kWh": 8402.27692590385,
+    "storage_kWh": 0.0,
+    "n_transmission_items": 7
+  },
+  "+C2 wind-dependent h_ce": {
+    "gate_ok": true,
+    "items_ok": true,
+    "reint_ok": true,
+    "residual_kWh": -95.6901811762154,
+    "residual_pct": -1.1743849867299774,
+    "in_sum_kWh": 8148.110053983272,
+    "out_sum_kWh": 8243.800235159486,
+    "storage_kWh": 0.0,
+    "n_transmission_items": 7
+  },
+  "+Conditioned zones": {
+    "gate_ok": true,
+    "items_ok": true,
+    "reint_ok": true,
+    "residual_kWh": -77.02107782483567,
+    "residual_pct": -1.9393479412924872,
+    "in_sum_kWh": 3971.4935203171754,
+    "out_sum_kWh": 4048.5145981420105,
+    "storage_kWh": 0.0,
+    "n_transmission_items": 7
+  },
+  "+Closure fixes": {
+    "gate_ok": true,
+    "items_ok": true,
+    "reint_ok": true,
+    "residual_kWh": 0.0,
+    "residual_pct": 0.0,
+    "in_sum_kWh": 3970.2859535729303,
+    "out_sum_kWh": 3970.285953572968,
+    "storage_kWh": -3.771856427192688e-11,
+    "n_transmission_items": 7
+  }
+}
