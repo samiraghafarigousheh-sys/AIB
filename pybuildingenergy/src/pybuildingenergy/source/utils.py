@@ -478,9 +478,36 @@ def _q50_for_construction_age(building_object) -> float:
 
 
 def _envelope_area_m2(building_object) -> float:
-    """Total envelope (opaque + transparent) area, m2, from the surface list."""
+    """
+    Air-leakage envelope area [m2]: the surfaces exposed to OUTDOOR AIR only.
+
+    Infiltration in ``n50 = q50 * A_env / V`` is leakage across the pressure
+    boundary with outdoors. Party walls, floors and ceilings facing adjacent
+    zones sit at (near) the same pressure and are not part of that boundary, and
+    ground-coupled and adiabatic elements are not air-exposed at all. Summing the
+    whole surface list -- as this did before -- oversized A_env ~6.5x for a
+    party-wall-dominated apartment (88.6 m2 vs 13.5 m2 exterior for Apt 305) and
+    inflated H_ve_inf by the same ratio.
+
+    Uses the same outdoor-air classification as the solver's external-node
+    assembly (``_surface_side_b_is_outdoor_air``), so the leakage envelope cannot
+    drift from the thermal model: exterior opaque and transparent elements only,
+    excluding adjacent-zone, ground-coupled and adiabatic elements.
+
+    NOTE ON UNCONDITIONED NEIGHBOURS. Leakage into an *unconditioned* buffer (an
+    unheated stairwell, say) is physically real, but it is leakage to buffer
+    conditions, not to outdoor air, and ISO 52016-1 already carries that heat
+    path through the b_ztu buffer temperature. This function therefore counts
+    only the outdoor-air boundary and does NOT add a partial-leakage term for
+    unconditioned neighbours; doing so would be a new modelling assumption and is
+    deliberately left out.
+    """
     total = 0.0
     for surf in building_object.get("building_surface", []) or []:
+        if not isinstance(surf, dict):
+            continue
+        if not _surface_side_b_is_outdoor_air(surf):
+            continue
         try:
             total += float(surf.get("area", 0.0) or 0.0)
         except (TypeError, ValueError):
