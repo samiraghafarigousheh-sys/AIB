@@ -8694,12 +8694,22 @@ class ISO52016:
                         float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[Tstepi])
                         if "WS10m" in sim_df.columns else 0.0
                     )
-                    H_ve_nat = float(H_ve_nat) + _infiltration_h_ve_inf_w_k(
+                    _h_ve_inf = _infiltration_h_ve_inf_w_k(
                         building_object,
                         float(Theta_old[ri]),
                         _T_ext_inf,
                         _u_wind_inf,
                     )
+                    # A1 fix: envelope-leakage air is outdoor air, so it contributes
+                    # BOTH a conductance H_ve_inf AND a matching source term
+                    # H_ve_inf*theta_e. The previous code summed only the conductance
+                    # into H_ve_nat and left S_ve_nat at its design-only value; the zone
+                    # balance Q_ve = H_ve*theta_int - S_ve then booked the infiltration
+                    # stream as if it entered at 0 C, overstating heat loss by
+                    # H_ve_inf*theta_e every hour (a one-directional heating error).
+                    # Adding the source term restores Q_ve = H_ve*(theta_int - theta_e).
+                    H_ve_nat = float(H_ve_nat) + _h_ve_inf
+                    S_ve_nat = float(S_ve_nat) + _h_ve_inf * _T_ext_inf
                     # --------------------------------------------------------------------
 
                     # Record for this timestep; do NOT append here - the while
@@ -10667,12 +10677,22 @@ class ISO52016:
                         float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[Tstepi])
                         if "WS10m" in sim_df.columns else 0.0
                     )
-                    H_ve_nat = float(H_ve_nat) + _infiltration_h_ve_inf_w_k(
+                    _h_ve_inf = _infiltration_h_ve_inf_w_k(
                         building_object,
                         float(Theta_old[ri]),
                         _T_ext_inf,
                         _u_wind_inf,
                     )
+                    # A1 fix: envelope-leakage air is outdoor air, so it contributes
+                    # BOTH a conductance H_ve_inf AND a matching source term
+                    # H_ve_inf*theta_e. The previous code summed only the conductance
+                    # into H_ve_nat and left S_ve_nat at its design-only value; the zone
+                    # balance Q_ve = H_ve*theta_int - S_ve then booked the infiltration
+                    # stream as if it entered at 0 C, overstating heat loss by
+                    # H_ve_inf*theta_e every hour (a one-directional heating error).
+                    # Adding the source term restores Q_ve = H_ve*(theta_int - theta_e).
+                    H_ve_nat = float(H_ve_nat) + _h_ve_inf
+                    S_ve_nat = float(S_ve_nat) + _h_ve_inf * _T_ext_inf
                     # --------------------------------------------------------------------
 
                     # Record for this timestep; do NOT append here - the while
