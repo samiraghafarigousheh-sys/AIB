@@ -102,7 +102,14 @@ def build_bui() -> dict:
             "number_adj_zone": 5,
             "net_floor_area": FLOOR_AREA,
             "construction_class": "class_iii",
-            "construction_year": "2006-today",
+            # Envelope-permeability band for infiltration (q50). The building was
+            # COMPLETED in 2006 and was therefore designed and built to the
+            # practice PRECEDING that year, so the pre-2006 band "1991-2005" is
+            # adopted rather than "2006-today". Under the Australian-calibrated
+            # table in utils.py that resolves q50 = 14.0 m3/(h*m2)@50Pa (derived
+            # 2006-2015 stock, upper). A measured blower-door result, if one
+            # existed, would override this via ventilation.envelope_permeability_q50.
+            "construction_year": "1991-2005",
             "country": "Australia",
         },
         "adjacent_zones": [

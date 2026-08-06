@@ -436,20 +436,32 @@ def _resolve_ventilation_component_profile_multiplier(
 # H_ve_inf = rho*cp * V * n_inf(t) / 3600   [W/K], summed into H_ve_nat.
 
 # Envelope permeability at 50 Pa, m3/(h*m2) of envelope area, by construction age
-# band. Follows the usual European stock ranges: pre-war masonry is very leaky,
-# and permeability falls steadily as air-barrier practice tightens.
+# band. Values are calibrated to AUSTRALIAN measured evidence; the previous
+# values on this branch followed European stock ranges and were implausibly
+# tight for Australian construction (they assigned 4.0 to 2006-today, against a
+# CSIRO new-dwelling mean of 6.9).
+#
+# Anchors:
+#   * CSIRO 2024 (Ambrose, n=233 new dwellings): mean 6.9 m3/(h*m2)@50Pa,
+#     stated design target ~5.  -> _Q50_DEFAULT and the leakiness floor.
+#   * Derived 2006-2015 stock: ~11-14.  -> "2006-today" (11.0) and "1991-2005" (14.0).
+#   * CSIRO 2015 (Ambrose & Syme, older stock): ~25-30.  -> pre-1960 bands.
+# Bands between measured anchors are INTERPOLATED and flagged as such, with the
+# two anchor points they sit between named. Permeability decreases monotonically
+# with recency (tighter air-barrier practice over time).
 _Q50_BY_CONSTRUCTION_AGE = {
-    "before 1900": 15.0,
-    "1901-1920": 13.0,
-    "1921-1945": 12.0,
-    "1946-1960": 11.0,
-    "1961-1875": 10.0,   # upstream spells this band '1961-1875' (sic, for 1961-1975)
-    "1961-1975": 10.0,
-    "1976-1990": 8.0,
-    "1991-2005": 6.0,
-    "2006-today": 4.0,
+    "before 1900": 30.0,   # CSIRO 2015 older-stock upper bound (25-30)
+    "1901-1920": 28.0,     # interpolated: before-1900 (30.0) <-> 1946-1960 (24.0)
+    "1921-1945": 26.0,     # interpolated: before-1900 (30.0) <-> 1946-1960 (24.0)
+    "1946-1960": 24.0,     # CSIRO 2015 older-stock lower band (~25)
+    "1961-1875": 20.0,     # upstream spells this band '1961-1875' (sic, for 1961-1975)
+    "1961-1975": 20.0,     # interpolated: 1946-1960 (24.0) <-> 1976-1990 (16.0)
+    "1976-1990": 16.0,     # interpolated: 1961-1975 (20.0) <-> 1991-2005 (14.0)
+    "1991-2005": 14.0,     # derived 2006-2015 stock, upper (11-14); pre-2006 practice
+    "2006-today": 11.0,    # derived 2006-2015 stock, lower (11-14)
 }
-_Q50_DEFAULT = 6.0        # used when the band is missing or unrecognised
+_Q50_DEFAULT = 6.9        # CSIRO 2024 (Ambrose, n=233 new dwellings) mean; used
+                          # when the construction-year band is missing/unrecognised
 
 # LBL divide-by-N divisor: converts the 50 Pa pressurisation rate to a mean
 # natural rate. 20 is the standard value for a sheltered, low-rise building.
