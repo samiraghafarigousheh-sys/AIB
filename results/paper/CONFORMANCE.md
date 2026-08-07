@@ -12,6 +12,14 @@ against the files as they stand on branch `claude/calibration-epw-rewrite-xwspe6
 > code is treated as authoritative — **no `.tex` and no engine logic were edited.** Divergences that
 > are themselves defects are called out as such and left for a separate task.
 
+> **UPDATE (infiltration fix + recalibration).** The three infiltration divergences below have since
+> been resolved on this branch: **A1** (source term — infiltration air now supplied at θₑ), **A3**
+> (envelope area scoped to outdoor-exposed surfaces), and **A4** (q₅₀ recalibrated to Australian CSIRO
+> data). Their verdicts are annotated **DIVERGES → RESOLVED** with the fixing commit, and the corrected
+> results are in `results/paper/RUN_REPORT_v2.md` and `SUPERSEDED.md`. The remaining divergences
+> (**A10**, **A11**) and the open item (**A14**) are unchanged; A14's perimeter/thermal-bridge findings
+> are analysed for a follow-up in `RUN_REPORT_v2.md §6`.
+
 ---
 
 ## Summary
@@ -21,7 +29,8 @@ against the files as they stand on branch `claude/calibration-epw-rewrite-xwspe6
 | Verdict | Items | Count |
 |---|---|---|
 | **CONFORMS** | A2, A5, A6, A7, A8, A9, A12, A13 | 8 |
-| **DIVERGES** | A1, A3, A4, A10, A11 | 5 |
+| **DIVERGES → RESOLVED** | A1, A3, A4 (fixed on this branch) | 3 |
+| **DIVERGES** (open) | A10, A11 | 2 |
 | **OPEN** (implemented but undocumented; needs paper text) | A14 | 1 |
 
 **Part B:** all six claims **CONFIRMED** (B1–B6).
@@ -91,7 +100,12 @@ area), plus the sanitiser's perimeter rewrite under A10/A14 which injects a ~2 k
 
 ## Part A — Conformance items
 
-### A1. Air exchange — additivity — **DIVERGES** (defect)
+### A1. Air exchange — additivity — **DIVERGES → RESOLVED**
+
+> **Resolved** (Item 1): the infiltration conductance now carries its outdoor-air source term
+> `S_ve += H_ve_inf·θ_e` in both single-zone solvers, so `Q_ve = H_ve·(θ_int − θ_e)` (verified to 0 W).
+> Annual heating falls 172.82 → 137.89 kWh. The additive-dispatch finding below stands; the
+> source-term omission it describes is the defect that was fixed.
 
 **Paper:** H_ve(t) = H_ve,nat(t) + H_ve,inf(t), summed per EN 16798-7; infiltration enters the
 balance "exactly like H_ve,nat".
@@ -142,7 +156,11 @@ The engine applies the **declared 2.0 l/(s·m²)**, giving **H_ve,nat = 48.45 W/
 
 ---
 
-### A3. Infiltration derivation — **DIVERGES** (steps conform; envelope area is wrong)
+### A3. Infiltration derivation — **DIVERGES → RESOLVED**
+
+> **Resolved** (Item 2): `_envelope_area_m2` now counts only outdoor-air-exposed surfaces
+> (`_surface_side_b_is_outdoor_air`), so A_env = 13.5 m² for Apt 305 (was 88.6). The derivation-step
+> findings below stand; the envelope-area defect they describe is the one that was fixed.
 
 **Code:** `_infiltration_h_ve_inf_w_k` (`utils.py:517–577`). Each paper step is present:
 
@@ -163,7 +181,12 @@ conform; the **area they are applied to does not "include only the surfaces inte
 
 ---
 
-### A4. Envelope permeability defaults — **DIVERGES** (expected; PENDING RECALIBRATION)
+### A4. Envelope permeability defaults — **DIVERGES → RESOLVED**
+
+> **Resolved** (Item 3): `_Q50_BY_CONSTRUCTION_AGE` recalibrated to Australian CSIRO evidence
+> (2024 Ambrose n=233 mean 6.9; 2015 Ambrose & Syme older stock 25–30; derived 2006–2015 stock 11–14).
+> Apt 305 adopts the pre-2006 band (q₅₀ = 14.0). Band keys unchanged; `envelope_permeability_q50`
+> override retained. The finding below documents the pre-fix European table.
 
 **Code:** `_Q50_BY_CONSTRUCTION_AGE` (`utils.py:441–451`), self-annotated "Follows the usual
 **European stock** ranges" (`utils.py:438–440`). `2006-today → 4.0 m³/(h·m²)@50 Pa`;
