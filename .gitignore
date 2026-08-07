@@ -18,6 +18,8 @@ results/*
 !results/au_canonical_essendon/
 !results/diagnostics/
 !results/tests/
+!results/paper/
+!results/paper_pre_infiltration_fix/
 
 # Downloaded TMYs stay out of the repo, but the reference EPW is committed:
 # every harness must run on the SAME weather, and a file that has to be fetched
@@ -31,3 +33,6 @@ weather_cache/*
 # read both files. `weather_melbourne.CANONICAL_EPW` and the wind-column
 # preflight are what stop it being picked up by accident.
 !weather_cache/AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw
+
+# Regenerable EnergyPlus raw simulation output (keep only the summary + figures)
+results/paper/baseline_vs_ep_v2/energyplus/

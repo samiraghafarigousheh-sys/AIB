@@ -145,6 +145,12 @@ TRAJECTORY = [
      "found defect — no implicit slab-on-ground fallback"),
     ("+Hemisphere", ["ef312fe"],
      "found defect — latitude-resolved coldest month"),
+    ("+Infiltration supply temp", ["c641378"],
+     "found defect (A1) — infiltration air supplied at theta_e, not 0 C"),
+    ("+Infiltration envelope area", ["bb678a9"],
+     "found defect (A3) — leakage envelope = outdoor-exposed surfaces only"),
+    ("+AU q50 recalibration", ["421c282"],
+     "recalibration — Australian CSIRO permeability bands; case adopts pre-2006"),
     ("+Closure fixes", None,          # resolved at run time from --closure-ref
      "ADJ transmission into the inventory, latent gating, GR classification"),
 ]

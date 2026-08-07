@@ -436,20 +436,32 @@ def _resolve_ventilation_component_profile_multiplier(
 # H_ve_inf = rho*cp * V * n_inf(t) / 3600   [W/K], summed into H_ve_nat.
 
 # Envelope permeability at 50 Pa, m3/(h*m2) of envelope area, by construction age
-# band. Follows the usual European stock ranges: pre-war masonry is very leaky,
-# and permeability falls steadily as air-barrier practice tightens.
+# band. Values are calibrated to AUSTRALIAN measured evidence; the previous
+# values on this branch followed European stock ranges and were implausibly
+# tight for Australian construction (they assigned 4.0 to 2006-today, against a
+# CSIRO new-dwelling mean of 6.9).
+#
+# Anchors:
+#   * CSIRO 2024 (Ambrose, n=233 new dwellings): mean 6.9 m3/(h*m2)@50Pa,
+#     stated design target ~5.  -> _Q50_DEFAULT and the leakiness floor.
+#   * Derived 2006-2015 stock: ~11-14.  -> "2006-today" (11.0) and "1991-2005" (14.0).
+#   * CSIRO 2015 (Ambrose & Syme, older stock): ~25-30.  -> pre-1960 bands.
+# Bands between measured anchors are INTERPOLATED and flagged as such, with the
+# two anchor points they sit between named. Permeability decreases monotonically
+# with recency (tighter air-barrier practice over time).
 _Q50_BY_CONSTRUCTION_AGE = {
-    "before 1900": 15.0,
-    "1901-1920": 13.0,
-    "1921-1945": 12.0,
-    "1946-1960": 11.0,
-    "1961-1875": 10.0,   # upstream spells this band '1961-1875' (sic, for 1961-1975)
-    "1961-1975": 10.0,
-    "1976-1990": 8.0,
-    "1991-2005": 6.0,
-    "2006-today": 4.0,
+    "before 1900": 30.0,   # CSIRO 2015 older-stock upper bound (25-30)
+    "1901-1920": 28.0,     # interpolated: before-1900 (30.0) <-> 1946-1960 (24.0)
+    "1921-1945": 26.0,     # interpolated: before-1900 (30.0) <-> 1946-1960 (24.0)
+    "1946-1960": 24.0,     # CSIRO 2015 older-stock lower band (~25)
+    "1961-1875": 20.0,     # upstream spells this band '1961-1875' (sic, for 1961-1975)
+    "1961-1975": 20.0,     # interpolated: 1946-1960 (24.0) <-> 1976-1990 (16.0)
+    "1976-1990": 16.0,     # interpolated: 1961-1975 (20.0) <-> 1991-2005 (14.0)
+    "1991-2005": 14.0,     # derived 2006-2015 stock, upper (11-14); pre-2006 practice
+    "2006-today": 11.0,    # derived 2006-2015 stock, lower (11-14)
 }
-_Q50_DEFAULT = 6.0        # used when the band is missing or unrecognised
+_Q50_DEFAULT = 6.9        # CSIRO 2024 (Ambrose, n=233 new dwellings) mean; used
+                          # when the construction-year band is missing/unrecognised
 
 # LBL divide-by-N divisor: converts the 50 Pa pressurisation rate to a mean
 # natural rate. 20 is the standard value for a sheltered, low-rise building.
@@ -478,9 +490,36 @@ def _q50_for_construction_age(building_object) -> float:
 
 
 def _envelope_area_m2(building_object) -> float:
-    """Total envelope (opaque + transparent) area, m2, from the surface list."""
+    """
+    Air-leakage envelope area [m2]: the surfaces exposed to OUTDOOR AIR only.
+
+    Infiltration in ``n50 = q50 * A_env / V`` is leakage across the pressure
+    boundary with outdoors. Party walls, floors and ceilings facing adjacent
+    zones sit at (near) the same pressure and are not part of that boundary, and
+    ground-coupled and adiabatic elements are not air-exposed at all. Summing the
+    whole surface list -- as this did before -- oversized A_env ~6.5x for a
+    party-wall-dominated apartment (88.6 m2 vs 13.5 m2 exterior for Apt 305) and
+    inflated H_ve_inf by the same ratio.
+
+    Uses the same outdoor-air classification as the solver's external-node
+    assembly (``_surface_side_b_is_outdoor_air``), so the leakage envelope cannot
+    drift from the thermal model: exterior opaque and transparent elements only,
+    excluding adjacent-zone, ground-coupled and adiabatic elements.
+
+    NOTE ON UNCONDITIONED NEIGHBOURS. Leakage into an *unconditioned* buffer (an
+    unheated stairwell, say) is physically real, but it is leakage to buffer
+    conditions, not to outdoor air, and ISO 52016-1 already carries that heat
+    path through the b_ztu buffer temperature. This function therefore counts
+    only the outdoor-air boundary and does NOT add a partial-leakage term for
+    unconditioned neighbours; doing so would be a new modelling assumption and is
+    deliberately left out.
+    """
     total = 0.0
     for surf in building_object.get("building_surface", []) or []:
+        if not isinstance(surf, dict):
+            continue
+        if not _surface_side_b_is_outdoor_air(surf):
+            continue
         try:
             total += float(surf.get("area", 0.0) or 0.0)
         except (TypeError, ValueError):
@@ -8694,12 +8733,22 @@ class ISO52016:
                         float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[Tstepi])
                         if "WS10m" in sim_df.columns else 0.0
                     )
-                    H_ve_nat = float(H_ve_nat) + _infiltration_h_ve_inf_w_k(
+                    _h_ve_inf = _infiltration_h_ve_inf_w_k(
                         building_object,
                         float(Theta_old[ri]),
                         _T_ext_inf,
                         _u_wind_inf,
                     )
+                    # A1 fix: envelope-leakage air is outdoor air, so it contributes
+                    # BOTH a conductance H_ve_inf AND a matching source term
+                    # H_ve_inf*theta_e. The previous code summed only the conductance
+                    # into H_ve_nat and left S_ve_nat at its design-only value; the zone
+                    # balance Q_ve = H_ve*theta_int - S_ve then booked the infiltration
+                    # stream as if it entered at 0 C, overstating heat loss by
+                    # H_ve_inf*theta_e every hour (a one-directional heating error).
+                    # Adding the source term restores Q_ve = H_ve*(theta_int - theta_e).
+                    H_ve_nat = float(H_ve_nat) + _h_ve_inf
+                    S_ve_nat = float(S_ve_nat) + _h_ve_inf * _T_ext_inf
                     # --------------------------------------------------------------------
 
                     # Record for this timestep; do NOT append here - the while
@@ -10667,12 +10716,22 @@ class ISO52016:
                         float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[Tstepi])
                         if "WS10m" in sim_df.columns else 0.0
                     )
-                    H_ve_nat = float(H_ve_nat) + _infiltration_h_ve_inf_w_k(
+                    _h_ve_inf = _infiltration_h_ve_inf_w_k(
                         building_object,
                         float(Theta_old[ri]),
                         _T_ext_inf,
                         _u_wind_inf,
                     )
+                    # A1 fix: envelope-leakage air is outdoor air, so it contributes
+                    # BOTH a conductance H_ve_inf AND a matching source term
+                    # H_ve_inf*theta_e. The previous code summed only the conductance
+                    # into H_ve_nat and left S_ve_nat at its design-only value; the zone
+                    # balance Q_ve = H_ve*theta_int - S_ve then booked the infiltration
+                    # stream as if it entered at 0 C, overstating heat loss by
+                    # H_ve_inf*theta_e every hour (a one-directional heating error).
+                    # Adding the source term restores Q_ve = H_ve*(theta_int - theta_e).
+                    H_ve_nat = float(H_ve_nat) + _h_ve_inf
+                    S_ve_nat = float(S_ve_nat) + _h_ve_inf * _T_ext_inf
                     # --------------------------------------------------------------------
 
                     # Record for this timestep; do NOT append here - the while
