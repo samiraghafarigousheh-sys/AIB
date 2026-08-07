@@ -33,15 +33,19 @@ would have hidden this.
 | 6.9 | CSIRO 2024 (Ambrose, n=233) new-dwelling mean | 115.85 | 12.94 | 128.79 kWh |
 | **14.0** | **adopted** — Australian pre-2006 band | 123.74 | 13.41 | 137.15 kWh |
 
-## Invariants (corrected final state)
+## Gate — PASSED (full cross-state)
 
-Closure residual 0.0000 %; 7 transmission line items (5 ADJ); latent 0.000 kWh
-with plant off and 0.000 kWh while heating; regression suite 181 passed / 17
-skipped. See `RUN_REPORT_v2.md §4`.
+The thirteen-state canonical trajectory (`trajectory_v2/comparison.md`) passes the V2
+residual gate on **every** state (max −1.77 %, machine-zero from +Ground on), with seven
+transmission line items and independent re-integration to 0.0000 % each state, latent gated
+to 0.000000 kWh both plant-off and while-heating, HEAD-invariant under reordering, and the
+final engine tree byte-for-byte identical to HEAD. Regression suite **198 passed / 0 skipped
+/ 0 failed**. See `RUN_REPORT_v2.md §4`.
 
-## Not regenerated here
+## EnergyPlus validation — unchanged by the fixes
 
-EnergyPlus baseline validation (no EP binary — unaffected by Items 1–3 because the
-baseline engine has no infiltration path) and the full ten-state trajectory /
-Tables 4–5b / Sankey charts (the trajectory harness needs its `TRAJECTORY` SHA list
-extended with the new states plus EnergyPlus). See `RUN_REPORT_v2.md §5`.
+Baseline ISO engine vs EnergyPlus 24.1.0 on the Essendon EPW: 121.0 vs 90.9 kWh/m²
+(heating −37.0 %, cooling +8.8 %). The baseline engine has no infiltration path
+("Infiltration: none" on both sides), so Items 1–3 leave this table unchanged — reasoned
+earlier, now demonstrated by running it. See `results/paper/baseline_vs_ep_v2/` and
+`RUN_REPORT_v2.md §3`.
