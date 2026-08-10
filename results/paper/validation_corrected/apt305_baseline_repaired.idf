@@ -1,0 +1,507 @@
+  Version, 24.1;
+
+  SimulationControl, No, No, No, No, Yes;
+
+  Building,
+    Apt_305_50_Barry_St_Carlton,
+    0.0, Suburbs, 0.04, 0.004,
+    FullInteriorAndExterior, 25, 6;
+
+  Timestep, 6;
+
+  GlobalGeometryRules,
+    UpperLeftCorner, CounterClockWise, World;
+
+  RunPeriod,
+    FullYear,
+    1, 1, , 12, 31, ,
+    Thursday, No, No, No, Yes, Yes;
+
+  ScheduleTypeLimits, Fraction, 0.0, 1.0, Continuous, Dimensionless;
+  ScheduleTypeLimits, Temperature, -100, 200, Continuous, Temperature;
+  ScheduleTypeLimits, Control Type, 0, 4, Discrete;
+  ScheduleTypeLimits, Any Number, -1e10, 1e10, Continuous;
+
+Schedule:Compact,
+  Occ_Sched,
+  Fraction,
+  Through: 12/31,
+  For: Weekdays,
+  Until: 01:00,1.0,
+  Until: 02:00,1.0,
+  Until: 03:00,1.0,
+  Until: 04:00,1.0,
+  Until: 05:00,1.0,
+  Until: 06:00,1.0,
+  Until: 07:00,1.0,
+  Until: 08:00,1.0,
+  Until: 09:00,1.0,
+  Until: 10:00,0.5,
+  Until: 11:00,0.4,
+  Until: 12:00,0.5,
+  Until: 13:00,0.5,
+  Until: 14:00,0.5,
+  Until: 15:00,0.4,
+  Until: 16:00,0.5,
+  Until: 17:00,0.5,
+  Until: 18:00,0.5,
+  Until: 19:00,0.5,
+  Until: 20:00,0.5,
+  Until: 21:00,1.0,
+  Until: 22:00,1.0,
+  Until: 23:00,1.0,
+  Until: 24:00,1.0,
+  For: AllOtherDays,
+  Until: 01:00,1.0,
+  Until: 02:00,1.0,
+  Until: 03:00,1.0,
+  Until: 04:00,1.0,
+  Until: 05:00,1.0,
+  Until: 06:00,1.0,
+  Until: 07:00,1.0,
+  Until: 08:00,1.0,
+  Until: 09:00,1.0,
+  Until: 10:00,0.8,
+  Until: 11:00,0.7,
+  Until: 12:00,0.7,
+  Until: 13:00,0.7,
+  Until: 14:00,0.7,
+  Until: 15:00,0.5,
+  Until: 16:00,0.5,
+  Until: 17:00,0.7,
+  Until: 18:00,0.8,
+  Until: 19:00,1.0,
+  Until: 20:00,1.0,
+  Until: 21:00,1.0,
+  Until: 22:00,1.0,
+  Until: 23:00,1.0,
+  Until: 24:00,1.0;
+
+Schedule:Compact,
+  App_Sched,
+  Fraction,
+  Through: 12/31,
+  For: Weekdays,
+  Until: 01:00,0.1,
+  Until: 02:00,0.1,
+  Until: 03:00,0.1,
+  Until: 04:00,0.1,
+  Until: 05:00,0.1,
+  Until: 06:00,0.1,
+  Until: 07:00,0.2,
+  Until: 08:00,0.3,
+  Until: 09:00,0.2,
+  Until: 10:00,0.2,
+  Until: 11:00,0.2,
+  Until: 12:00,0.2,
+  Until: 13:00,0.3,
+  Until: 14:00,0.2,
+  Until: 15:00,0.2,
+  Until: 16:00,0.2,
+  Until: 17:00,0.2,
+  Until: 18:00,0.3,
+  Until: 19:00,0.3,
+  Until: 20:00,0.4,
+  Until: 21:00,1.0,
+  Until: 22:00,0.6,
+  Until: 23:00,0.4,
+  Until: 24:00,0.2,
+  For: AllOtherDays,
+  Until: 01:00,0.1,
+  Until: 02:00,0.1,
+  Until: 03:00,0.1,
+  Until: 04:00,0.1,
+  Until: 05:00,0.1,
+  Until: 06:00,0.1,
+  Until: 07:00,0.1,
+  Until: 08:00,0.2,
+  Until: 09:00,0.3,
+  Until: 10:00,0.4,
+  Until: 11:00,0.3,
+  Until: 12:00,0.3,
+  Until: 13:00,0.4,
+  Until: 14:00,0.3,
+  Until: 15:00,0.3,
+  Until: 16:00,0.3,
+  Until: 17:00,0.3,
+  Until: 18:00,0.4,
+  Until: 19:00,0.4,
+  Until: 20:00,0.5,
+  Until: 21:00,1.0,
+  Until: 22:00,0.6,
+  Until: 23:00,0.4,
+  Until: 24:00,0.2;
+
+Schedule:Compact,
+  Lit_Sched,
+  Fraction,
+  Through: 12/31,
+  For: Weekdays,
+  Until: 01:00,0.0,
+  Until: 02:00,0.0,
+  Until: 03:00,0.0,
+  Until: 04:00,0.0,
+  Until: 05:00,0.0,
+  Until: 06:00,0.0,
+  Until: 07:00,0.3,
+  Until: 08:00,0.3,
+  Until: 09:00,0.1,
+  Until: 10:00,0.0,
+  Until: 11:00,0.0,
+  Until: 12:00,0.0,
+  Until: 13:00,0.0,
+  Until: 14:00,0.0,
+  Until: 15:00,0.0,
+  Until: 16:00,0.0,
+  Until: 17:00,0.1,
+  Until: 18:00,0.5,
+  Until: 19:00,0.8,
+  Until: 20:00,0.8,
+  Until: 21:00,0.8,
+  Until: 22:00,0.7,
+  Until: 23:00,0.4,
+  Until: 24:00,0.1,
+  For: AllOtherDays,
+  Until: 01:00,0.0,
+  Until: 02:00,0.0,
+  Until: 03:00,0.0,
+  Until: 04:00,0.0,
+  Until: 05:00,0.0,
+  Until: 06:00,0.0,
+  Until: 07:00,0.0,
+  Until: 08:00,0.1,
+  Until: 09:00,0.3,
+  Until: 10:00,0.3,
+  Until: 11:00,0.2,
+  Until: 12:00,0.2,
+  Until: 13:00,0.2,
+  Until: 14:00,0.2,
+  Until: 15:00,0.2,
+  Until: 16:00,0.2,
+  Until: 17:00,0.3,
+  Until: 18:00,0.5,
+  Until: 19:00,0.8,
+  Until: 20:00,0.8,
+  Until: 21:00,0.8,
+  Until: 22:00,0.7,
+  Until: 23:00,0.4,
+  Until: 24:00,0.1;
+
+Schedule:Compact,
+  Heat_SP,
+  Temperature,
+  Through: 12/31,
+  For: Weekdays,
+  Until: 01:00,15.0,
+  Until: 02:00,15.0,
+  Until: 03:00,15.0,
+  Until: 04:00,15.0,
+  Until: 05:00,15.0,
+  Until: 06:00,15.0,
+  Until: 07:00,15.0,
+  Until: 08:00,15.0,
+  Until: 09:00,15.0,
+  Until: 10:00,15.0,
+  Until: 11:00,15.0,
+  Until: 12:00,15.0,
+  Until: 13:00,15.0,
+  Until: 14:00,15.0,
+  Until: 15:00,15.0,
+  Until: 16:00,15.0,
+  Until: 17:00,15.0,
+  Until: 18:00,15.0,
+  Until: 19:00,15.0,
+  Until: 20:00,18.0,
+  Until: 21:00,18.0,
+  Until: 22:00,18.0,
+  Until: 23:00,18.0,
+  Until: 24:00,15.0,
+  For: AllOtherDays,
+  Until: 01:00,15.0,
+  Until: 02:00,15.0,
+  Until: 03:00,15.0,
+  Until: 04:00,15.0,
+  Until: 05:00,15.0,
+  Until: 06:00,15.0,
+  Until: 07:00,15.0,
+  Until: 08:00,15.0,
+  Until: 09:00,15.0,
+  Until: 10:00,15.0,
+  Until: 11:00,15.0,
+  Until: 12:00,15.0,
+  Until: 13:00,15.0,
+  Until: 14:00,15.0,
+  Until: 15:00,15.0,
+  Until: 16:00,15.0,
+  Until: 17:00,15.0,
+  Until: 18:00,15.0,
+  Until: 19:00,18.0,
+  Until: 20:00,18.0,
+  Until: 21:00,18.0,
+  Until: 22:00,18.0,
+  Until: 23:00,18.0,
+  Until: 24:00,15.0;
+
+Schedule:Compact,
+  Cool_SP,
+  Temperature,
+  Through: 12/31,
+  For: Weekdays,
+  Until: 01:00,28.0,
+  Until: 02:00,28.0,
+  Until: 03:00,28.0,
+  Until: 04:00,28.0,
+  Until: 05:00,28.0,
+  Until: 06:00,28.0,
+  Until: 07:00,28.0,
+  Until: 08:00,28.0,
+  Until: 09:00,28.0,
+  Until: 10:00,28.0,
+  Until: 11:00,28.0,
+  Until: 12:00,28.0,
+  Until: 13:00,28.0,
+  Until: 14:00,28.0,
+  Until: 15:00,28.0,
+  Until: 16:00,28.0,
+  Until: 17:00,28.0,
+  Until: 18:00,26.0,
+  Until: 19:00,26.0,
+  Until: 20:00,26.0,
+  Until: 21:00,26.0,
+  Until: 22:00,26.0,
+  Until: 23:00,26.0,
+  Until: 24:00,28.0,
+  For: AllOtherDays,
+  Until: 01:00,28.0,
+  Until: 02:00,28.0,
+  Until: 03:00,28.0,
+  Until: 04:00,28.0,
+  Until: 05:00,28.0,
+  Until: 06:00,28.0,
+  Until: 07:00,28.0,
+  Until: 08:00,28.0,
+  Until: 09:00,28.0,
+  Until: 10:00,26.0,
+  Until: 11:00,26.0,
+  Until: 12:00,26.0,
+  Until: 13:00,26.0,
+  Until: 14:00,26.0,
+  Until: 15:00,26.0,
+  Until: 16:00,26.0,
+  Until: 17:00,26.0,
+  Until: 18:00,26.0,
+  Until: 19:00,26.0,
+  Until: 20:00,26.0,
+  Until: 21:00,26.0,
+  Until: 22:00,26.0,
+  Until: 23:00,26.0,
+  Until: 24:00,28.0;
+
+Schedule:Compact,
+  Always1,
+  Fraction,
+  Through: 12/31,
+  For: AllDays,
+  Until: 24:00,1.0;
+
+Schedule:Compact,
+  Always4,
+  Control Type,
+  Through: 12/31,
+  For: AllDays,
+  Until: 24:00,4;
+
+Schedule:Compact,
+  Activity_W,
+  Any Number,
+  Through: 12/31,
+  For: AllDays,
+  Until: 24:00,80.0;
+
+  Zone, Apt305, 0.0, 0.0, 0.0, 0.0, 1, 1, 2.7, 54.0, 20.0;
+
+  Material:NoMass, Mat_ExtWall, MediumRough,  0.83, 0.9, 0.75, 0.75;
+  Material:NoMass, Mat_IntWall, MediumSmooth, 0.14, 0.9, 0.0,  0.0;
+  Material:NoMass, Mat_IntSlab, MediumSmooth, 0.2956, 0.9, 0.0,  0.0;
+  Material, Mat_InternalMass, MediumRough, 0.01, 5.0, 1000.0, 1000.0;
+  WindowMaterial:SimpleGlazingSystem, Mat_Window, 5.4, 0.4875;
+
+  Construction, Con_ExtWall, Mat_ExtWall;
+  Construction, Con_IntWall, Mat_IntWall;
+  Construction, Con_IntSlab, Mat_IntSlab;
+  Construction, Con_IntMass, Mat_InternalMass;
+  Construction, Con_Window,  Mat_Window;
+
+  InternalMass, Apt305_IntMass, Con_IntMass, Apt305, , 20.0;
+
+  SurfaceProperty:OtherSideCoefficients,
+    OSC_apt_north,
+    7.6923,
+    0.0,
+    0.0,
+    0.867,
+    0.0,
+    0.0,
+    0.133;
+
+  SurfaceProperty:OtherSideCoefficients,
+    OSC_apt_south,
+    7.6923,
+    0.0,
+    0.0,
+    0.867,
+    0.0,
+    0.0,
+    0.133;
+
+  SurfaceProperty:OtherSideCoefficients,
+    OSC_corridor,
+    7.6923,
+    0.0,
+    0.0,
+    0.733,
+    0.0,
+    0.0,
+    0.267;
+
+  SurfaceProperty:OtherSideCoefficients,
+    OSC_apt_below,
+    7.6923,
+    0.0,
+    0.0,
+    0.926,
+    0.0,
+    0.0,
+    0.074;
+
+  SurfaceProperty:OtherSideCoefficients,
+    OSC_apt_above,
+    7.6923,
+    0.0,
+    0.0,
+    0.926,
+    0.0,
+    0.0,
+    0.074;
+
+  BuildingSurface:Detailed,
+    WestWall, Wall, Con_ExtWall, Apt305, ,
+    Outdoors, , SunExposed, WindExposed, , 4,
+    0.0,5.0,2.7,
+    0.0,5.0,0.0,
+    0.0,0.0,0.0,
+    0.0,0.0,2.7;
+
+  BuildingSurface:Detailed,
+    NorthWall, Wall, Con_IntWall, Apt305, ,
+    OtherSideCoefficients, OSC_apt_north, NoSun, NoWind, , 4,
+    4.0,5.0,2.7,
+    4.0,5.0,0.0,
+    0.0,5.0,0.0,
+    0.0,5.0,2.7;
+
+  BuildingSurface:Detailed,
+    EastWall, Wall, Con_IntWall, Apt305, ,
+    OtherSideCoefficients, OSC_corridor, NoSun, NoWind, , 4,
+    4.0,0.0,2.7,
+    4.0,0.0,0.0,
+    4.0,5.0,0.0,
+    4.0,5.0,2.7;
+
+  BuildingSurface:Detailed,
+    SouthWall, Wall, Con_IntWall, Apt305, ,
+    OtherSideCoefficients, OSC_apt_south, NoSun, NoWind, , 4,
+    0.0,0.0,2.7,
+    0.0,0.0,0.0,
+    4.0,0.0,0.0,
+    4.0,0.0,2.7;
+
+  BuildingSurface:Detailed,
+    FloorSlab, Floor, Con_IntSlab, Apt305, ,
+    OtherSideCoefficients, OSC_apt_below, NoSun, NoWind, , 4,
+    0.0,0.0,0.0,
+    0.0,5.0,0.0,
+    4.0,5.0,0.0,
+    4.0,0.0,0.0;
+
+  BuildingSurface:Detailed,
+    CeilingSlab, Ceiling, Con_IntSlab, Apt305, ,
+    OtherSideCoefficients, OSC_apt_above, NoSun, NoWind, , 4,
+    0.0,0.0,2.7,
+    4.0,0.0,2.7,
+    4.0,5.0,2.7,
+    0.0,5.0,2.7;
+
+  FenestrationSurface:Detailed,
+    WestWin_Fixed, Window, Con_Window, WestWall, , , , 1.0, 4,
+    0.0,4.0,1.9,  0.0,4.0,1.0,  0.0,3.1,1.0,  0.0,3.1,1.9;
+
+  FenestrationSurface:Detailed,
+    WestWin_Operable, Window, Con_Window, WestWall, , , , 1.0, 4,
+    0.0,2.5,1.9,  0.0,2.5,1.0,  0.0,1.6,1.0,  0.0,1.6,1.9;
+
+  OtherEquipment,
+    Apt305_Occupants, None, Apt305, Occ_Sched,
+    EquipmentLevel, 616.1400, , , 0.0, 0.6, 0.0;
+
+  OtherEquipment,
+    Apt305_Appliances, None, Apt305, App_Sched,
+    EquipmentLevel, 440.1000, , , 0.0, 0.6, 0.0;
+
+  OtherEquipment,
+    Apt305_Lights, None, Apt305, Lit_Sched,
+    EquipmentLevel, 0.0000, , , 0.0, 0.6, 0.0;
+
+  ZoneVentilation:DesignFlowRate,
+    Apt305_Ventilation, Apt305, Always1,
+    Flow/Zone, 0.04, , , ,
+    Natural, 0.0, 1.0,
+    1.0, 0.0, 0.0, 0.0;
+
+  ZoneHVAC:IdealLoadsAirSystem,
+    Apt305_IdealLoads, ,
+    Apt305_SupplyNode, , ,
+    50, 13, 0.0156, 0.0077,
+    NoLimit, , , NoLimit, , ,
+    , ,
+    None, ,
+    None,
+    , , , , , , ;
+
+  ZoneHVAC:EquipmentList,
+    Apt305_EqpList,
+    SequentialLoad,
+    ZoneHVAC:IdealLoadsAirSystem, Apt305_IdealLoads, 1, 1, , ;
+
+  ZoneHVAC:EquipmentConnections,
+    Apt305, Apt305_EqpList,
+    Apt305_SupplyNode, ,
+    Apt305_ZoneAirNode, Apt305_ReturnNode;
+
+  ThermostatSetpoint:DualSetpoint, Apt305_DualSP, Heat_SP, Cool_SP;
+
+  ZoneControl:Thermostat,
+    Apt305_Thermostat, Apt305, Always4,
+    ThermostatSetpoint:DualSetpoint, Apt305_DualSP;
+
+  ZoneControl:Thermostat:OperativeTemperature,
+    Apt305_Thermostat, Constant, 0.5;
+
+  Output:SQLite, SimpleAndTabular;
+  OutputControl:Table:Style, HTML;
+  Output:Table:SummaryReports, AllSummary;
+  Output:Variable, *, Zone Ideal Loads Supply Air Total Heating Energy, Hourly;
+  Output:Variable, *, Zone Ideal Loads Supply Air Total Cooling Energy, Hourly;
+  Output:Variable, *, Zone Mean Air Temperature, Hourly;
+  Output:Diagnostics, DisplayExtraWarnings;
+
+  Output:Variable, *, Zone Ideal Loads Supply Air Sensible Heating Energy, Hourly;
+  Output:Variable, *, Zone Ideal Loads Supply Air Sensible Cooling Energy, Hourly;
+  Output:Variable, *, Zone Infiltration Sensible Heat Loss Energy, Hourly;
+  Output:Variable, *, Zone Infiltration Sensible Heat Gain Energy, Hourly;
+  Output:Variable, *, Zone Ventilation Sensible Heat Loss Energy, Hourly;
+  Output:Variable, *, Zone Ventilation Sensible Heat Gain Energy, Hourly;
+  Output:Variable, *, Surface Average Face Conduction Heat Transfer Energy, Hourly;
+  Output:Variable, *, Surface Window Net Heat Transfer Energy, Hourly;
+  Output:Variable, *, Zone Windows Total Transmitted Solar Radiation Energy, Hourly;
+  Output:Variable, *, Zone Operative Temperature, Hourly;
