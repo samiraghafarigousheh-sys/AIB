@@ -1,0 +1,16 @@
+{
+  "weather_source": "epw",
+  "weather_path": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+  "weather_label": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw \u2014 Melbourne-Essendon.Fields (lat -37.73, lon 144.91)",
+  "station": "Melbourne-Essendon.Fields",
+  "latitude": -37.7275,
+  "longitude": 144.9067,
+  "site_offset_deg": 0.087,
+  "wind": {
+    "mean_ms": 4.84,
+    "pct_hours_exactly_zero": 1.575,
+    "pct_hours_above_4ms": 59.84,
+    "dead_calm_months": [],
+    "screened": true
+  }
+}

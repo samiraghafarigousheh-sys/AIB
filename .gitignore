@@ -20,6 +20,11 @@ results/*
 !results/tests/
 !results/paper/
 !results/paper_pre_infiltration_fix/
+# The set the wind-profile correction supersedes. Committed, not just left on
+# disk: SUPERSEDED_wind_profile.md quotes it, the wind diagnostic reads the
+# as-published IDF out of it to establish Item 0, and a "retained" set that
+# lives only in an ephemeral container is not retained.
+!results/paper_pre_wind_profile/
 
 # Downloaded TMYs stay out of the repo, but the reference EPW is committed:
 # every harness must run on the SAME weather, and a file that has to be fetched

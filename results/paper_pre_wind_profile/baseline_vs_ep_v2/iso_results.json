@@ -1,0 +1,38 @@
+{
+  "heating_kWh": 1779.3602760664112,
+  "cooling_kWh": 640.8369660455543,
+  "latent_kWh": 900.0516905113534,
+  "int_gains_kWh": 5356.685952,
+  "b_ztu": {
+    "apt_above": 0.926,
+    "apt_below": 0.926,
+    "apt_north": 0.867,
+    "apt_south": 0.867,
+    "corridor": 0.733
+  },
+  "gains_w": {
+    "base_W": 0.0,
+    "occupants_W": 616.14,
+    "appliances_W": 440.0999999999999,
+    "lighting_W": 0.0
+  },
+  "balance": {
+    "Q_solar_gains_kWh": 810.5399874668723,
+    "Q_internal_gains_kWh": 5356.685952,
+    "Q_tr_window_loss_kWh": 281.6343648711059,
+    "Q_tr_window_gain_kWh": 92.54734770573076,
+    "Q_tr_opaque_loss_kWh": 114.324255078122,
+    "Q_tr_opaque_gain_kWh": 414.6576632997716,
+    "Q_tr_total_loss_kWh": 372.80625262013757,
+    "Q_tr_total_gain_kWh": 484.05264367641206,
+    "Q_ve_loss_kWh": 2031.9092286368254,
+    "Q_ve_gain_kWh": 79.69288868577321,
+    "Q_tb_loss_kWh": 2.0969585607584,
+    "Q_tb_gain_kWh": 0.08224416859079454,
+    "Q_ground_loss_kWh": 98.97550202732356,
+    "Q_ground_gain_kWh": 2.2576003315198805,
+    "Q_storage_charge_kWh": 0.0,
+    "Q_storage_discharge_kWh": 0.0,
+    "Q_storage_net_kWh": 0.0
+  }
+}
