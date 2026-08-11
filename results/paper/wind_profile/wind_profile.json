@@ -8,7 +8,7 @@
     "n": 8760
   },
   "idf_static": {
-    "idf": "results/paper/validation_corrected/apt305_conditioned.idf",
+    "idf": "results/paper_pre_wind_profile/validation_corrected/apt305_conditioned.idf",
     "terrain_field": "Suburbs",
     "terrain_class_equivalent": "suburban",
     "site_heightvariation_present": false,
@@ -28,6 +28,29 @@
       "WestWall": 0.4613812876480726,
       "WestWin_Fixed": 0.4686919648958063,
       "WestWin_Operable": 0.4686919648958063
+    }
+  },
+  "idf_static_now": {
+    "idf": "results/paper/validation_corrected/apt305_conditioned.idf",
+    "terrain_field": "Suburbs",
+    "terrain_class_equivalent": "suburban",
+    "site_heightvariation_present": false,
+    "site_weatherstation_present": false,
+    "basis": "Site:HeightVariation ABSENT; EnergyPlus falls back to the Building object's Terrain = 'Suburbs'",
+    "exponent_a": 0.22,
+    "boundary_layer_delta_m": 370.0,
+    "station_sensor_height_m": 10.0,
+    "station_exponent_a": 0.14,
+    "station_boundary_layer_delta_m": 270.0,
+    "wind_exposed_surface_heights_m": {
+      "WestWall": 6.75,
+      "WestWin_Fixed": 6.8500000000000005,
+      "WestWin_Operable": 6.8500000000000005
+    },
+    "factors": {
+      "WestWall": 0.6574055674303007,
+      "WestWin_Fixed": 0.6595359505393404,
+      "WestWin_Operable": 0.6595359505393404
     }
   },
   "site": {
@@ -158,7 +181,7 @@
       "factor": 1.0,
       "mean_local_m_s": 4.840331050228311,
       "pct_hours_above_pivot": 59.84018264840183,
-      "direction": "reduction"
+      "direction": "unchanged"
     }
   ],
   "item0": {

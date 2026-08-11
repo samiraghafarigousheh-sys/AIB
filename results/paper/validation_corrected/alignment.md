@@ -6,6 +6,8 @@ Every parameter that affects the result, marked `ALIGNED` (already identical), `
 
 | Parameter | ISO 52016-1 (corrected) | EnergyPlus (matched case) | Status |
 |---|---|---|---|
+| WIND — the fourth mismatch | terrain 'suburban' (ASHRAE a = 0.22, delta = 370 m) at z = 6.75 m; station wind x 0.6574, mean 3.18 m/s. Feeds h_ce only | Building Terrain = Suburbs, the same ASHRAE class; Site:HeightVariation absent so EnergyPlus derives (a, delta) from it; the whole geometry is translated up so the west wall's centroid lands on the same z = 6.75 m | `FIXED` |
+| Wind fed to infiltration | station wind, unadjusted (u_ref = 4 m/s is a met-station reference and the LBL N = 20 already carries the shelter) | the ISO f(t) series is embedded as a schedule, so this is matched by construction | `ALIGNED` |
 | Geometry / areas | 5.0 x 4.0 x 2.7 m, 1.62 m2 west glazing, 13.5 m2 outdoor-exposed envelope | same, derived from the same apt305_building module | `ALIGNED` |
 | Opaque U-values | ext 1.00, partition 2.50, slab 1.80 W/m2K | Material:NoMass R back-calculated from the same U | `ALIGNED` |
 | Surface thermal mass | C = 0 J/m2K on every element | Material:NoMass (no storage) | `ALIGNED` |
@@ -19,7 +21,7 @@ Every parameter that affects the result, marked `ALIGNED` (already identical), `
 | Internal gain radiant split | f_int_c = 0.4, i.e. 0.6 radiant for every gain | OtherEquipment radiant fraction 0.6 | `FIXED` |
 | Ventilation (designed) | 2.0 l/(s m2) constant, H_ve_nat = 48.4 W/K | ZoneVentilation:DesignFlowRate 0.04 m3/s on an always-on schedule with constant coefficients, so the exchange happens every hour. Attaching it to the ideal-loads system instead would deliver it only in the hours the system runs (686 of 8760 here) | `FIXED` |
 | INFILTRATION — the correction under test | q50 = 14.0 m3/(h m2)@50Pa over the OUTDOOR-EXPOSED envelope A_env = 13.50 m2 (not the 88.6 m2 whole-surface sum); n50 = q50*A_env/V = 3.5000 1/h over V = 54.0 m3; LBL divide-by-N with N = 20 gives a mean natural rate n_inf = 0.1750 1/h | ZoneInfiltration:DesignFlowRate, Flow/Zone 0.00262500 m3/s (= 0.1750 ACH), constant term A = 1 and B = C = D = 0, modulated hour by hour by an embedded Schedule:Compact carrying the ISO f(t) | `FIXED` |
-| Infiltration stack/wind modulation | f(t) = sqrt((Cs*\|theta_int(t-1) - theta_e\| + Cw*u^2) / (Cs*10 + Cw*4^2)), Cs = 0.015, Cw = 0.001; f = 1 at reference conditions. Annual mean f = 0.7589, range 0.0978-1.7106 | E+'s own modulation is A + B\|dT\| + C*u + D*u^2, which is LINEAR in the driving forces and cannot reproduce a square root. The ISO f(t) series is therefore precomputed from the corrected ISO run and embedded as an 8760-value Schedule:Compact. This matches the series hour for hour but makes the coupling ONE-WAY: f(t) carries the ISO zone temperature, not E+'s. The --inf-mode constant run bounds what that costs. | `FIXED (one-way)` |
+| Infiltration stack/wind modulation | f(t) = sqrt((Cs*\|theta_int(t-1) - theta_e\| + Cw*u^2) / (Cs*10 + Cw*4^2)), Cs = 0.015, Cw = 0.001; f = 1 at reference conditions. Annual mean f = 0.7607, range 0.0798-1.7121 | E+'s own modulation is A + B\|dT\| + C*u + D*u^2, which is LINEAR in the driving forces and cannot reproduce a square root. The ISO f(t) series is therefore precomputed from the corrected ISO run and embedded as an 8760-value Schedule:Compact. This matches the series hour for hour but makes the coupling ONE-WAY: f(t) carries the ISO zone temperature, not E+'s. The --inf-mode constant run bounds what that costs. | `FIXED (one-way)` |
 | Setpoints | heat 18/15, cool 26/28 driven by the hourly profiles | DualSetpoint from the same profiles, control type schedule = 4 | `ALIGNED` |
 | Control temperature | operative temperature (0.5*T_air + 0.5*T_mr) | ZoneControl:Thermostat:OperativeTemperature, radiative fraction 0.5 | `FIXED` |
 | HVAC | ideal, 10 MW capacity | ZoneHVAC:IdealLoadsAirSystem, NoLimit | `ALIGNED` |
@@ -31,7 +33,7 @@ Every parameter that affects the result, marked `ALIGNED` (already identical), `
 | Surface heat transfer | C2 correction: h_ce = 4v + 4 on outdoor-exposed surfaces; the ISO constant elsewhere | TARP/DOE-2 dynamic algorithms — a different correlation, not a different intent | `METHOD` |
 | Conduction discretisation | five-node RC per element, ISO 52016-1 Annex B | conduction transfer functions | `METHOD` |
 
-24 parameters checked — 8 already aligned, 12 mismatches corrected, 4 irreducible method differences.
+26 parameters checked — 9 already aligned, 13 mismatches corrected, 4 irreducible method differences.
 
 ### Choice of adjacent-zone representation
 
@@ -81,9 +83,9 @@ The script asserts that the neighbour-count multiplier is absent before building
 | LBL divisor `N` | 20 | sheltered low-rise |
 | `n_inf = n50/N` | 0.1750 h⁻¹ | mean natural rate |
 | Design flow | 0.00262500 m³/s | `ZoneInfiltration:DesignFlowRate`, `Flow/Zone` |
-| Modulation `f(t)` | mean 0.7589, range 0.0978–1.7106 | embedded `Schedule:Compact`, 8760 values |
-| Mean `H_ve_inf` | 2.367 W/K | against `H_ve_nat` = 48.4 W/K designed ventilation |
-| Annual infiltration energy | 95.01 kWh | `Σ H_ve_inf·(θ_int − θ_e)` |
+| Modulation `f(t)` | mean 0.7607, range 0.0798–1.7121 | embedded `Schedule:Compact`, 8760 values |
+| Mean `H_ve_inf` | 2.372 W/K | against `H_ve_nat` = 48.4 W/K designed ventilation |
+| Annual infiltration energy | 96.26 kWh | `Σ H_ve_inf·(θ_int − θ_e)` |
 
 **How the stack/wind modulation was represented.** EnergyPlus's own modulation is `A + B|ΔT| + C·u + D·u²`, which is linear in the driving forces. The ISO expression is `f = √((Cs·|ΔT| + Cw·u²) / (Cs·ΔT_ref + Cw·u_ref²))` — a square root of a linear combination, which no choice of `A…D` reproduces. The series is therefore precomputed from the corrected ISO run and embedded as an 8760-value schedule with `A = 1` and `B = C = D = 0`.
 

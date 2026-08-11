@@ -1,6 +1,6 @@
 # Paper figure set
 
-Generated 2026-08-10 by `tools/figures/make_all_figures.py` from the committed result files under `results/`. **The engine was not re-run.** Every number in every figure is read from a file already in the repository, so the figures and the tables in the paper are the same measurements rather than two runs that happen to agree.
+Generated 2026-08-11 by `tools/figures/make_all_figures.py` from the committed result files under `results/`. **The engine was not re-run.** Every number in every figure is read from a file already in the repository, so the figures and the tables in the paper are the same measurements rather than two runs that happen to agree.
 
 **Weather:** `AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw`  
 **Canonical state:** `+Closure fixes` — 123.74 kWh sensible heating, 13.41 kWh sensible cooling, 1.14 kWh gated latent, 138.29 kWh total, **6.91 kWh/m²·yr**  
@@ -143,13 +143,13 @@ The residual is drawn as a hatched, unfilled band on the input side — the side
 
 **Key numbers displayed**
 
-- Sensible heating, Baseline → canonical: 1,779.36 → 123.74 kWh (peak 4,228.46 kWh at +Internal gains)
-- Sensible cooling, Baseline → canonical: 640.84 → 13.41 kWh
-- Total energy need on the paper's metric, Baseline → canonical: 122.32 → 6.91 kWh/m²·yr (peak 220.82 at +Internal gains)
-- Gated latent, Baseline → canonical: 26.12 → 1.14 kWh; ungated 900.05 → 600.11 kWh
-- Ventilation + infiltration loss, Baseline → canonical: 2,031.91 → 1,974.73 kWh (peak 2,860.65 kWh at +Ventilation)
+- Sensible heating, Baseline → canonical: 1,779.36 → 122.88 kWh (peak 4,228.46 kWh at +Internal gains)
+- Sensible cooling, Baseline → canonical: 640.84 → 19.90 kWh
+- Total energy need on the paper's metric, Baseline → canonical: 122.32 → 7.21 kWh/m²·yr (peak 220.82 at +Internal gains)
+- Gated latent, Baseline → canonical: 26.12 → 1.51 kWh; ungated 900.05 → 597.86 kWh
+- Ventilation + infiltration loss, Baseline → canonical: 2,031.91 → 1,992.25 kWh (peak 2,860.65 kWh at +Ventilation)
 - V2 residual: worst -1.77 % at +Conditioned zones; machine zero from +Ground contact; all 13 states inside ±5 %
-- Per-area values printed on panel 3 (the paper's published figures, each asserted against the recomputed value): Baseline 122.32, +C1 dynamic window 120.77, +C2 wind h_ce 119.70, +Ventilation 133.41, +Latent 132.88, +Internal gains 220.82, +Conditioned zones 10.75, +Ground contact 10.75, +Hemisphere 10.75, +Infil. supply temp 8.52, +Infil. envelope area 6.44, +AU q50 6.91, +Closure fixes 6.91
+- Per-area values printed on panel 3 (the paper's published figures, each asserted against the recomputed value): Baseline 122.32, +C1 dynamic window 120.77, +C2 wind h_ce 119.70, +Ventilation 133.41, +Latent 132.88, +Internal gains 220.82, +Conditioned zones 10.75, +Ground contact 10.75, +Hemisphere 10.75, +Infil. supply temp 8.52, +Infil. envelope area 6.44, +AU q50 6.91, +Closure fixes 6.91, +Wind profile 7.21
 
 **Note**
 
@@ -172,10 +172,10 @@ Panel 3 uses the paper's metric (sensible heating + sensible cooling + gated lat
 
 **Key numbers displayed**
 
-- Heating cascade: 1,779.36 kWh → 123.74 kWh
-- Heating steps (kWh): +C1 dynamic window +4.60, +C2 wind h_ce +4.15, +Ventilation +409.31, +Latent +0.00, +Internal gains +2,031.04, +Conditioned zones -4,018.18, +Ground contact +0.00, +Hemisphere +0.00, +Infil. supply temp -56.33, +Infil. envelope area -39.08, +AU q50 +8.87, +Closure fixes +0.00
-- Cooling cascade: 640.84 kWh → 13.41 kWh
-- Cooling steps (kWh): +C1 dynamic window -34.77, +C2 wind h_ce -25.30, +Ventilation -135.09, +Latent +0.00, +Internal gains -264.89, +Conditioned zones -176.66, +Ground contact +0.00, +Hemisphere +0.00, +Infil. supply temp +11.02, +Infil. envelope area -2.26, +AU q50 +0.53, +Closure fixes +0.00
+- Heating cascade: 1,779.36 kWh → 122.88 kWh
+- Heating steps (kWh): +C1 dynamic window +4.60, +C2 wind h_ce +4.15, +Ventilation +409.31, +Latent +0.00, +Internal gains +2,031.04, +Conditioned zones -4,018.18, +Ground contact +0.00, +Hemisphere +0.00, +Infil. supply temp -56.33, +Infil. envelope area -39.08, +AU q50 +8.87, +Closure fixes +0.00, +Wind profile -0.86
+- Cooling cascade: 640.84 kWh → 19.90 kWh
+- Cooling steps (kWh): +C1 dynamic window -34.77, +C2 wind h_ce -25.30, +Ventilation -135.09, +Latent +0.00, +Internal gains -264.89, +Conditioned zones -176.66, +Ground contact +0.00, +Hemisphere +0.00, +Infil. supply temp +11.02, +Infil. envelope area -2.26, +AU q50 +0.53, +Closure fixes +0.00, +Wind profile +6.48
 - Opposing movements the figure exists to show: +Internal gains +2,031.04; +Conditioned zones −4,018.18; +Infil. supply temp −56.33; +Infil. envelope area −39.08; +AU q50 +8.87 (heating)
 
 **Note**
@@ -199,11 +199,11 @@ Deltas are differences between consecutive states of the committed trajectory, n
 
 **Key numbers displayed**
 
-- Inputs 3,757.1 kWh; outputs 3,757.1 kWh; residual 9.313e-13 kWh (2.48e-14 %) — machine zero
-- Heating 123.7 kWh; internal gains 730.3 kWh; solar & free-gain 2,903.0 kWh
-- Five party surfaces (ADJ) 954.6 kWh = 25.4 % of output
-- Seven transmission line items resolved: West exterior wall (OP) 459.2 kWh; N wall → Apt 306 (ADJ) 164.0 kWh; S wall → Apt 304 (ADJ) 164.0 kWh; E wall → corridor (ADJ) 205.0 kWh; Floor → Apt 205 (ADJ) 210.8 kWh; Ceiling → Apt 405 (ADJ) 210.8 kWh; West windows (W) 353.2 kWh
-- Ventilation (losses) 1,974.7 kWh; cooling 13.4 kWh; ground 0.0 kWh (the phantom slab term is gone); thermal bridges 1.9 kWh
+- Inputs 3,822.5 kWh; outputs 3,822.5 kWh; residual 0.000e+00 kWh (0.00e+00 %) — machine zero
+- Heating 122.9 kWh; internal gains 730.3 kWh; solar & free-gain 2,969.3 kWh
+- Five party surfaces (ADJ) 1,015.6 kWh = 26.6 % of output
+- Seven transmission line items resolved: West exterior wall (OP) 457.2 kWh; N wall → Apt 306 (ADJ) 174.7 kWh; S wall → Apt 304 (ADJ) 174.7 kWh; E wall → corridor (ADJ) 218.3 kWh; Floor → Apt 205 (ADJ) 224.0 kWh; Ceiling → Apt 405 (ADJ) 224.0 kWh; West windows (W) 335.6 kWh
+- Ventilation (losses) 1,992.2 kWh; cooling 19.9 kWh; ground 0.0 kWh (the phantom slab term is gone); thermal bridges 1.9 kWh
 
 **Note**
 
@@ -222,23 +222,25 @@ Drawn by the same renderer as F2 with the same band order, colour map and kWh-pe
 
 **Built from**
 
-- `results/diagnostics/wind_stats_essendon.json`
-- `results/diagnostics/wind_verdict_essendon.md (the same numbers, for cross-check)`
-- `weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw (panels 1–2 only, verified against wind_stats_essendon.json)`
+- `results/paper/wind_profile/wind_stats_station.json (panels 1–4)`
+- `results/paper/wind_profile/wind_stats_terrain.json (panels 5–6)`
+- `results/paper/wind_profile/wind_verdict_terrain.md (the same numbers, for cross-check)`
+- `weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw (panels 1–2 only, verified against wind_stats_station.json)`
 
 **Key numbers displayed**
 
 - Annual: mean 4.84 m/s, median 4.6, max 18.0; 59.8 % above the 4 m/s pivot; 1.58 % exactly 0.0 m/s
 - Diurnal: calmest hour 3.88 m/s (hour 4), windiest 6.15 m/s (hour 15)
 - No degenerate month; worst exact-zero share Jun 6.4 %
-- Cooling-plant-on hours: 33 h, mean wind 5.74 m/s (1.19× the annual mean), 84.8 % above the pivot
-- Wind bands (hours, extra cooling kWh, share): exactly 0 138 h +0.00 kWh -0.0 %; 0 – 2 m/s 601 h +0.00 kWh -0.0 %; 2 – 4 m/s 2,766 h +0.23 kWh -7.1 %; above 4 m/s 5,255 h -3.50 kWh 107.1 %
-- 100.0 % of the -3.27 kWh arises in non-zero wind
-- Controlled experiment: cooling 9.61 kWh at the fixed ISO coefficient against 6.34 kWh with h_ce = 4v + 4, a reduction of 3.27 kWh; heating 173.28 → 172.82 kWh; verdict a+b
+- Cooling-plant-on hours: 54 h, mean wind 5.76 m/s (1.19× the annual mean), 79.6 % above the pivot
+- Wind bands (hours, extra cooling kWh, share): exactly 0 138 h +0.00 kWh 0.0 %; 0 – 2 m/s 1,903 h +0.32 kWh 18.2 %; 2 – 4 m/s 4,141 h +2.67 kWh 152.3 %; above 4 m/s 2,578 h -1.24 kWh -70.5 %
+- 100.0 % of the -4.73 kWh arises in non-zero wind
+- Controlled experiment: cooling 18.14 kWh at the fixed ISO coefficient against 19.90 kWh with h_ce = 4u + 4 on the local wind, an increase of 1.75 kWh; heating 124.09 → 122.88 kWh; verdict b
+- C2 REVERSES SIGN: -4.73 kWh on the raw 10 m station column against +1.75 kWh on the wind local to the wall (factor 0.6574, suburban at z = 6.75 m). The ISO-fixed control arm is identical in both runs at 18.14 kWh
 
 **Note**
 
-Panels 1 and 2 need hourly detail that the committed summary JSON does not carry, so they are computed from the committed EPW named in the trajectory's provenance — the same file the diagnostic ran on, not a second run. figstyle.verify_epw_against_stats asserts hour count, mean, max, exact-zero share and above-pivot share against wind_stats_essendon.json and aborts on any mismatch.
+Panels 1 and 2 need hourly detail that the committed summary JSON does not carry, so they are computed from the committed EPW named in the trajectory's provenance — the same file the diagnostic ran on, not a second run. figstyle.verify_epw_against_stats asserts hour count, mean, max, exact-zero share and above-pivot share against wind_stats_station.json and aborts on any mismatch. Panels 5–6 use the terrain-corrected run, because that is the wind the correlation is actually fed; the two are kept apart deliberately.
 
 ---
 
@@ -287,12 +289,12 @@ Caption should make the general claim: a weather record can pass conventional va
 
 **Key numbers displayed**
 
-- Gated latent by state (kWh): Baseline 26.12, +C1 dynamic window 25.34, +C2 wind h_ce 25.02, +Ventilation 25.10, +Latent 14.53, +Internal gains 7.07, +Conditioned zones 0.53, +Ground contact 0.53, +Hemisphere 0.53, +Infil. supply temp 1.22, +Infil. envelope area 1.05, +AU q50 1.14, +Closure fixes 1.14
-- Ungated moisture balance by state (kWh): Baseline 900.05, +C1 dynamic window 905.27, +C2 wind h_ce 906.29, +Ventilation 1148.49, +Latent 634.24, +Internal gains 934.29, +Conditioned zones 718.56, +Ground contact 718.56, +Hemisphere 718.56, +Infil. supply temp 634.98, +Infil. envelope area 589.33, +AU q50 600.11, +Closure fixes 600.11
-- Canonical state: the gate removes 600.11 → 1.14 kWh, 99.8 % of the raw balance
-- Monthly gated latent at the canonical state (kWh): Jan 0.79, Feb 0.09, Mar 0.03, Apr 0.00, May 0.00, Jun 0.00, Jul 0.00, Aug 0.00, Sep 0.00, Oct 0.00, Nov 0.04, Dec 0.18; Dec–Feb 1.07 against Jun–Aug 0.00
+- Gated latent by state (kWh): Baseline 26.12, +C1 dynamic window 25.34, +C2 wind h_ce 25.02, +Ventilation 25.10, +Latent 14.53, +Internal gains 7.07, +Conditioned zones 0.53, +Ground contact 0.53, +Hemisphere 0.53, +Infil. supply temp 1.22, +Infil. envelope area 1.05, +AU q50 1.14, +Closure fixes 1.14, +Wind profile 1.51
+- Ungated moisture balance by state (kWh): Baseline 900.05, +C1 dynamic window 905.27, +C2 wind h_ce 906.29, +Ventilation 1148.49, +Latent 634.24, +Internal gains 934.29, +Conditioned zones 718.56, +Ground contact 718.56, +Hemisphere 718.56, +Infil. supply temp 634.98, +Infil. envelope area 589.33, +AU q50 600.11, +Closure fixes 600.11, +Wind profile 597.86
+- Canonical state: the gate removes 597.86 → 1.51 kWh, 99.7 % of the raw balance
+- Monthly gated latent at the canonical state (kWh): Jan 0.92, Feb 0.14, Mar 0.10, Apr 0.00, May 0.00, Jun 0.00, Jul 0.00, Aug 0.00, Sep 0.00, Oct 0.03, Nov 0.07, Dec 0.24; Dec–Feb 1.30 against Jun–Aug 0.00
 - Gating audit: latent charged with the cooling plant off = 0.000000 kWh and latent charged while the heating plant runs = 0.000000 kWh, on all thirteen states; audit axis full scale 1e-03 kWh
-- Cooling-plant hours at the canonical state: 54 of 8,760; latent charged in 47 hours
+- Cooling-plant hours at the canonical state: 73 of 8,760; latent charged in 66 hours
 
 **Note**
 
@@ -317,7 +319,7 @@ Panel 3's y-limit is set to 1e-3 kWh so that any non-zero value would be visible
 
 **Key numbers displayed**
 
-- V2 residual (% of inputs) by state: Baseline -1.16, +C1 dynamic window -1.17, +C2 wind h_ce -1.17, +Ventilation -1.01, +Latent -1.01, +Internal gains -1.04, +Conditioned zones -1.77, +Ground contact +0.00, +Hemisphere +0.00, +Infil. supply temp +0.00, +Infil. envelope area +0.00, +AU q50 +0.00, +Closure fixes +0.00
+- V2 residual (% of inputs) by state: Baseline -1.16, +C1 dynamic window -1.17, +C2 wind h_ce -1.17, +Ventilation -1.01, +Latent -1.01, +Internal gains -1.04, +Conditioned zones -1.77, +Ground contact +0.00, +Hemisphere +0.00, +Infil. supply temp +0.00, +Infil. envelope area +0.00, +AU q50 +0.00, +Closure fixes +0.00, +Wind profile +0.00
 - Largest excursion -1.77 % at +Conditioned zones; machine zero from +Ground contact onward; all thirteen inside ±5 %
 - Resolved transmission line items: 7 on every state (5 ADJ party surfaces + 1 OP west wall + 1 W west windows)
 - Independent re-integration agrees with the reported sum to 0.0000 % on every state

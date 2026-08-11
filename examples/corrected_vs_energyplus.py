@@ -1266,10 +1266,11 @@ def write_markdown(tables: dict, iso: dict, ep: dict, base: dict,
         f"{abs(c['abs_change_pp']):.1f} percentage points. In absolute terms the "
         f"gap *falls*, from "
         f"{abs(base['iso']['cooling_kWh'] - base['ep']['cooling_kWh']):,.1f} kWh to "
-        f"{abs(iso['cooling_kWh'] - ep['cooling_kWh']):,.1f} kWh. The percentage "
-        "grows because the cooling load itself collapses by 98 % across the "
-        "corrections, so a smaller absolute residual sits on a far smaller "
-        "denominator.",
+        f"{abs(iso['cooling_kWh'] - ep['cooling_kWh']):,.1f} kWh"
+        + ("." if c["improved"] else
+           ". The percentage nevertheless grows, because the cooling load itself "
+           "falls much faster than the residual does, so a smaller absolute gap "
+           "sits on a far smaller denominator."),
         f"- **Largest remaining contributor in absolute energy**: "
         f"{_largest(iso, ep)}. See `DISCREPANCY.md`.",
         "",
@@ -1490,6 +1491,35 @@ def loss_paths(iso: dict, ep: dict) -> list[dict]:
     return out
 
 
+
+def _largest_path_note(paths: list) -> str:
+    """Name the biggest loss-path disagreement from the numbers, not from memory.
+
+    This sentence used to hardcode "the five party surfaces", which was true of
+    the run it was written for and stopped being true the moment the wind was
+    matched. Deriving the name as well as the value is the only version that
+    cannot go stale.
+    """
+    worst = max(paths, key=lambda r: abs(r["iso"] - r["ep"]))
+    d = worst["iso"] - worst["ep"]
+    name = worst["path"]
+    why = ""
+    if "party" in name.lower():
+        why = (" They are 75.10 m² and 88.6 % of the envelope UA, so a small "
+               "fractional error there outweighs a large one anywhere else.")
+    elif "window" in name.lower():
+        why = (" That row bundles conduction with transmitted solar on both "
+               "sides, so it is the row where a difference in solar "
+               "distribution would land — and 1.62 m² of west glazing at "
+               "g = 0.65 carries a large gain for its area.")
+    elif "ventilation" in name.lower():
+        why = (" It is the largest single stream in the balance, so the "
+               "disagreement is small in fractional terms even where it is "
+               "largest in kWh.")
+    return (f"**The largest single disagreement is {name.lower()}, "
+            f"{d:+,.0f} kWh.**{why}")
+
+
 def write_discrepancy(tables: dict, iso: dict, ep: dict, base: dict,
                       sens: dict | None, outdir: Path, epw_label: str) -> None:
     gap_h = iso["heating_kWh"] - ep["heating_kWh"]
@@ -1561,10 +1591,7 @@ def write_discrepancy(tables: dict, iso: dict, ep: dict, base: dict,
         "which is the direct check on the one-way schedule coupling described in "
         "`alignment.md`. The two engines are computing the same leakage stream.",
         "",
-        f"**The largest single disagreement is the five party surfaces, "
-        f"{max(paths[:-1], key=lambda r: abs(r['iso'] - r['ep']))['iso'] - max(paths[:-1], key=lambda r: abs(r['iso'] - r['ep']))['ep']:+,.0f} kWh.** "
-        "They are 75.10 m² and 88.6 % of the envelope UA, so a small fractional "
-        "error there outweighs a large one anywhere else.",
+        _largest_path_note(paths[:-1]),
         "",
         "**On why the Σ row does not equal the difference in plant energy.** "
         "The two engines partition the zone balance differently — ISO 52016-1 "
@@ -1775,10 +1802,14 @@ def main() -> None:
               f"{iso['per_sqm']:.2f} kWh/m2·yr")
 
         # The canonical headline, gated before anything is compared against it.
-        for name, got, want in (("sensible heating", iso["heating_kWh"], 123.74),
-                                ("sensible cooling", iso["cooling_kWh"], 13.41),
-                                ("gated latent", iso["latent_kWh"], 1.14),
-                                ("per-area need", iso["per_sqm"], 6.91)):
+        # Canonical state is now `+Wind profile`: h_ce is driven by the wind
+        # local to the wall, not by the raw 10 m station column. The previous
+        # 123.74 / 13.41 / 1.14 / 6.91 is `+Closure fixes`, retained under
+        # results/paper_pre_wind_profile/.
+        for name, got, want in (("sensible heating", iso["heating_kWh"], 122.88),
+                                ("sensible cooling", iso["cooling_kWh"], 19.90),
+                                ("gated latent", iso["latent_kWh"], 1.51),
+                                ("per-area need", iso["per_sqm"], 7.21)):
             if abs(got - want) > 0.01:
                 raise Unmatchable(
                     f"the corrected engine returns {got:.4f} for {name}, the "

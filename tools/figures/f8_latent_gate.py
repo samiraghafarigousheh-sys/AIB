@@ -27,18 +27,28 @@ def build() -> dict:
     can_i = F.STATES.index(F.CANONICAL_STATE)
 
     removed_pct = 100.0 * (1.0 - can["Q_C_lat_gated"] / can["Q_C_lat_ungated"])
-    if abs(removed_pct - 99.8) > 0.05:
+    # 99.75 % at the +Wind profile canonical state: 1.5091 kWh gated of 597.86 kWh
+    # ungated. The previous published value was 99.81 % at +Closure fixes
+    # (1.1396 of 600.11). The gate moved because the wind profile raises the
+    # cooling load, and with it the hours the plant runs and so the hours latent
+    # is charged in -- the gate itself is unchanged. The claim is now 99.7 %, not
+    # 99.8 %; retained set at results/paper_pre_wind_profile/.
+    if abs(removed_pct - 99.75) > 0.05:
         raise F.MissingQuantity(
             f"F8: the gate removes {removed_pct:.2f} % at the canonical state, "
-            "the paper states 99.8 %")
+            "the paper states 99.75 %")
 
     monthly = can["monthly_latent_cooling_kWh"]
     summer = sum(monthly[i] for i in SUMMER)
     winter = sum(monthly[i] for i in WINTER)
-    if abs(summer - 1.07) > 0.01 or abs(winter) > 1e-9:
+    # 1.30 kWh in Dec-Feb at the +Wind profile canonical state, against 1.07 at
+    # +Closure fixes: the same seasonal concentration on a larger gated total.
+    # Jun-Aug must stay EXACTLY zero -- that is the gate working, not a
+    # measurement, so it keeps a machine-precision tolerance.
+    if abs(summer - 1.30) > 0.01 or abs(winter) > 1e-9:
         raise F.MissingQuantity(
             f"F8: Dec–Feb is {summer:.4f} kWh and Jun–Aug is {winter:.4f} kWh, "
-            "the paper states 1.07 and 0.00")
+            "the paper states 1.30 and 0.00")
 
     off = [st[s]["latent_kWh_with_cooling_off"] for s in F.STATES]
     while_heat = [st[s]["latent_kWh_while_heating"] for s in F.STATES]

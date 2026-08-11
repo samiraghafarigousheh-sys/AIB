@@ -53,8 +53,15 @@ DEFAULT_EPW = (REPO_ROOT / "weather_cache"
                / "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw")
 DEFAULT_OUT = REPO_ROOT / "results" / "paper" / "wind_profile"
 
-# The two IDFs the validation was run from.
-IDF_MATCHED = REPO_ROOT / "results/paper/validation_corrected/apt305_conditioned.idf"
+# Item 0 is a finding about the IDF **as published**, so it must read the
+# retained copy. The live one under results/paper/ has since had its geometry
+# raised to match the ISO side's height -- reading that would report the fix and
+# call it the defect.
+IDF_AS_PUBLISHED = (REPO_ROOT
+                    / "results/paper_pre_wind_profile/validation_corrected"
+                    / "apt305_conditioned.idf")
+IDF_NOW = REPO_ROOT / "results/paper/validation_corrected/apt305_conditioned.idf"
+IDF_MATCHED = IDF_AS_PUBLISHED if IDF_AS_PUBLISHED.is_file() else IDF_NOW
 IDF_BASELINE = REPO_ROOT / "results/paper/validation_corrected/apt305_baseline_repaired.idf"
 
 PIVOT_MS = 4.0     # 4u + 4 == 20 W/(m2 K), the ISO 13789 constant
@@ -364,6 +371,20 @@ def write_report(d: dict, out_md: Path) -> None:
                 f"{v['mean_m_s'] / wmean:.4f} |")
         add("")
 
+    if d.get("idf_static_now"):
+        now = d["idf_static_now"]
+        add("### The same IDF after the fix")
+        add("")
+        add("The matched case now places the zone three storeys up, so "
+            "EnergyPlus evaluates the same wall at the height the ISO side "
+            "resolved. Read from the live IDF, not asserted:")
+        add("")
+        add("| Surface | Centroid height z (m) | u_local / u_met |")
+        add("| --- | ---: | ---: |")
+        for name, z in sorted(now["wind_exposed_surface_heights_m"].items()):
+            add(f"| `{name}` | {z:.2f} | {now['factors'][name]:.4f} |")
+        add("")
+
     add("### The mismatch")
     add("")
     add("| Engine | Wind fed to the external film | Annual mean |")
@@ -572,6 +593,8 @@ def main() -> None:
 
     # --- Item 0 ---------------------------------------------------------
     static = read_idf_wind_treatment(IDF_MATCHED)
+    static_now = (read_idf_wind_treatment(IDF_NOW)
+                  if IDF_NOW.is_file() and IDF_NOW != IDF_MATCHED else None)
     print(f"IDF {static['idf']}: Terrain='{static['terrain_field']}', "
           f"Site:HeightVariation "
           f"{'present' if static['site_heightvariation_present'] else 'ABSENT'}")
@@ -632,6 +655,7 @@ def main() -> None:
         "weather_name": weather.name,
         "epw": epw_stats,
         "idf_static": static,
+        "idf_static_now": static_now,
         "site": site,
         "identity": identity,
         "crossings": crossings,
