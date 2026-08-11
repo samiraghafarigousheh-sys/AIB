@@ -153,7 +153,19 @@ TRAJECTORY = [
      "recalibration — Australian CSIRO permeability bands; case adopts pre-2006"),
     ("+Closure fixes", None,          # resolved at run time from --closure-ref
      "ADJ transmission into the inventory, latent gating, GR classification"),
+    ("+Wind profile", ["fab0ab0"],
+     "found defect (C2b) — h_ce driven by the wind local to the surface "
+     "(ASHRAE terrain/height profile), not by the raw 10 m station column"),
 ]
+
+# The wind-profile state must not be swept into the closure instrument: it is a
+# physics change, and back-porting it onto every earlier state would make the
+# trajectory measure it thirteen times and report it as moving nothing. Run with
+#     --closure-ref 86a3cd6
+# (the commit immediately before it) so `closure_commits` cannot see it. Asserted
+# rather than left to the operator, because a silently widened instrument does
+# not announce itself.
+WIND_PROFILE_COMMIT = "fab0ab0"
 
 # The metrics on which the trajectory's final state must reproduce HEAD, and the
 # tolerance: 0.01 is the printed precision, so anything that would change a
@@ -732,6 +744,14 @@ def main() -> None:
             f"{missing}. The instrument would not be constant across states and "
             f"every residual below would be meaningless. Resolved: "
             f"{[c[:9] for c in closure]}")
+    if any(c.startswith(WIND_PROFILE_COMMIT) for c in closure):
+        raise SystemExit(
+            f"the wind-profile commit {WIND_PROFILE_COMMIT} is inside the closure "
+            f"set resolved from {args.closure_base}..{args.closure_ref}. It is a "
+            f"physics change, not an instrument change: back-porting it onto every "
+            f"state would apply it thirteen times over and then report its own row "
+            f"as moving nothing. Re-run with --closure-ref set to the commit before "
+            f"it.")
     print(f"closure commits: {[c[:9] for c in closure]}\n")
 
     tmp = Path(tempfile.mkdtemp(prefix="aib-canon-"))
