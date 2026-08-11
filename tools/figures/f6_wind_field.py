@@ -270,7 +270,9 @@ def build() -> dict:
                         "$h_{ce}=4u+4$\nlocal wind (terrain + height)"],
                        fontsize=8.2)
     p6.set_ylabel("Annual sensible cooling (kWh)")
-    p6.set_ylim(0, max(vals) * 1.62)
+    # Headroom for two stacked brackets AND the annotation box above them. At
+    # 1.62 the upper bracket label ran into the box.
+    p6.set_ylim(0, max(vals) * 2.05)
     p6.set_title("6 — The controlled experiment: one switch, and which wind it is fed",
                  loc="left", pad=7)
     for xi, v in zip(xs, vals):
@@ -279,7 +281,7 @@ def build() -> dict:
                     color=F.INK if xi == 0 else "white")
     # One bracket per arm, against the shared control.
     for xi, dc in ((1, delta_c_station), (2, delta_c)):
-        br = max(vals) * (1.16 if xi == 1 else 1.34)
+        br = max(vals) * (1.12 if xi == 1 else 1.30)
         p6.plot([0, 0, xi, xi],
                 [c_fix * 1.06, br, br, vals[xi] * 1.06], color=F.INK, lw=1.0)
         p6.annotate(f"{dc:+.2f} kWh", (xi / 2.0, br), xytext=(0, 3),
