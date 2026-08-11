@@ -101,8 +101,16 @@ def _pct(v: float, nd: int = 1) -> str:
 # Measurement
 # ---------------------------------------------------------------------------
 
-def measure(weather: str) -> dict:
-    """One weather read, two annual runs differing only in the h_ce model."""
+def measure(weather: str, wind_profile: bool = True) -> dict:
+    """
+    One weather read, two annual runs differing only in the h_ce model.
+
+    ``wind_profile=False`` forces the h_ce correlation back onto the raw 10 m
+    station column. That is the *before* state for the terrain question, and it
+    has to be produced by this same engine tree rather than read from an older
+    result file: the earlier wind_stats predate the closure fixes, so comparing
+    against them would attribute the closure changes to the terrain correction.
+    """
     import numpy as np
     import pandas as pd
 
@@ -114,7 +122,7 @@ def measure(weather: str) -> dict:
         b, _ = sanitize_and_validate_BUI(build_bui(), fix=True)
         hourly, annual, _ = ISO52016.Temperature_and_Energy_needs_calculation(
             b, weather_source="epw", path_weather_file=weather,
-            return_sankey_data=True, **kw)
+            return_sankey_data=True, wind_profile=wind_profile, **kw)
         return hourly, annual
 
     b0, _ = sanitize_and_validate_BUI(build_bui(), fix=True)
@@ -127,7 +135,19 @@ def measure(weather: str) -> dict:
                        window_convection_model="table")
 
     n = len(h_dyn)
-    wind = pd.to_numeric(sim_df["WS10m"], errors="coerce").to_numpy(float)[-n:]
+    wind_station = pd.to_numeric(sim_df["WS10m"], errors="coerce").to_numpy(float)[-n:]
+
+    # The wind the h_ce correlation is actually driven by. The EPW column is a
+    # 10 m open-terrain station reading; the engine lifts it to the building
+    # surface's own terrain and height (change 2b). Every statistic below that
+    # is about the correlation -- the pivot, the bands, the mean h_ce -- must
+    # be taken on THIS series, not on the station column, or it describes a
+    # wind the model never saw.
+    from pybuildingenergy.source.utils import resolve_local_wind_factor
+    wind_factor, wind_audit = resolve_local_wind_factor(
+        build_bui(), wind_profile=wind_profile)
+    wind = wind_station * wind_factor
+
     t_ext_w = pd.to_numeric(sim_df["T2m"], errors="coerce").to_numpy(float)[-n:]
     t_ext_h = pd.to_numeric(h_dyn["T_ext"], errors="coerce").to_numpy(float)
 
@@ -149,6 +169,9 @@ def measure(weather: str) -> dict:
     return {
         "index": h_dyn.index,
         "wind": wind,
+        "wind_station": wind_station,
+        "wind_factor": float(wind_factor),
+        "wind_audit": wind_audit,
         "t_ext": t_ext_h,
         "ghi": pd.to_numeric(sim_df["G(h)"], errors="coerce").to_numpy(float)[-n:],
         "q_c_dyn": q_c_dyn, "q_c_fix": q_c_fix,
@@ -220,6 +243,22 @@ def summarise(d: dict) -> dict:
         s["pct_zero_added_hours"] = float(100.0 * np.mean(w[added] == 0.0))
     s["wind_ratio_cooling_to_annual"] = s["mean_wind_cooling_dyn"] / s["mean_wind_annual"]
 
+    # The station column, kept alongside so the terrain correction can be read
+    # off directly rather than inferred. Every other wind statistic in this
+    # dict is on the LOCAL series.
+    ws = d["wind_station"]
+    s["wind_factor"] = d["wind_factor"]
+    s["wind_audit"] = d["wind_audit"]
+    s["station_mean_wind_annual"] = float(np.nanmean(ws))
+    s["station_median_wind_annual"] = float(np.nanmedian(ws))
+    s["station_max_wind_annual"] = float(np.nanmax(ws))
+    s["station_pct_hours_above_pivot"] = float(100.0 * np.mean(ws > PIVOT_MS))
+    s["station_mean_h_ce_annual"] = float(np.nanmean(4.0 * ws + 4.0))
+    s["station_excess_annual"] = s["station_mean_h_ce_annual"] - H_CE_FIXED
+    s["station_pct_hours_exactly_zero"] = float(100.0 * np.mean(ws == 0.0))
+    s["station_mean_wind_cooling_dyn"] = (
+        float(np.nanmean(ws[cool_d])) if cool_d.any() else float("nan"))
+
     # How much of the delta comes from *genuine* wind, i.e. everything except the
     # exactly-zero bucket. On the RO file this was 4 %; it is the number the
     # earlier open finding turns on, so it is computed rather than inferred from
@@ -274,24 +313,40 @@ def make_figure(d: dict, s: dict, out_png: Path, weather_name: str = "") -> None
 
     MONTHS = [calendar.month_abbr[m][0] for m in range(1, 13)]
 
-    # 1 -- annual distribution --------------------------------------------
+    # 1 -- station vs terrain-corrected, the panel the correction turns on ---
+    #
+    # Both distributions on one axis with the pivot marked on both, because the
+    # whole sign question is which side of that line each series sits on. The
+    # station series is what the engine used to be driven by; the local series
+    # is what it is driven by now.
     ax = axes[0, 0]
-    ax.hist(w[w > 0], bins=40, color=BLUE, edgecolor="none", zorder=3,
-            label="hours with non-zero wind")
-    zero_n = int((w == 0).sum())
-    ax.bar([0.0], [zero_n], width=0.28, color=BAD, edgecolor="none", zorder=4,
-           label=f"exactly 0.0 m/s ({zero_n:,} h)")
-    ax.axvline(PIVOT_MS, color=PIVOT_C, linewidth=1.6, linestyle="--", zorder=5)
-    style(ax, "Annual distribution of hourly wind speed", "WS10m  [m/s]", "hours")
-    ax.legend(fontsize=7.5, frameon=False, labelcolor=TEXT_SECONDARY, loc="upper right")
-    ax.text(PIVOT_MS + 0.15, ax.get_ylim()[1] * 0.55,
-            "pivot 4 m/s\n(4v+4 = 20 = ISO fixed)", color=PIVOT_C, fontsize=8,
+    ws = d["wind_station"]
+    bins1 = np.linspace(0.0, float(np.nanmax(ws)) or 1.0, 46)
+    ax.hist(ws, bins=bins1, color=TEXT_SECONDARY, alpha=0.38, edgecolor="none",
+            zorder=3, label=f"station, 10 m open terrain (mean "
+                            f"{s['station_mean_wind_annual']:.2f} m/s)")
+    ax.hist(w, bins=bins1, color=BLUE, alpha=0.80, edgecolor="none", zorder=4,
+            label=f"local, terrain + height (mean {s['mean_wind_annual']:.2f} m/s)")
+    ax.axvline(PIVOT_MS, color=PIVOT_C, linewidth=1.8, linestyle="--", zorder=6)
+    ax.axvline(s["station_mean_wind_annual"], color=TEXT_SECONDARY, linewidth=1.2,
+               linestyle=":", zorder=5)
+    ax.axvline(s["mean_wind_annual"], color=BLUE, linewidth=1.2, linestyle=":", zorder=5)
+    style(ax, "Station wind vs the wind the correlation actually sees",
+          "wind speed  [m/s]", "hours")
+    ax.legend(fontsize=7.2, frameon=False, labelcolor=TEXT_SECONDARY, loc="upper right")
+    ax.set_ylim(0, ax.get_ylim()[1] * 1.30)
+    ax.text(PIVOT_MS + 0.15, ax.get_ylim()[1] * 0.62,
+            "pivot 4 m/s\n(4u+4 = 20 = ISO fixed)", color=PIVOT_C, fontsize=8,
             va="top", ha="left", style="italic")
-    ax.text(0.98, 0.44,
-            f"{s['pct_hours_above_pivot']:.1f} % above the pivot\n"
-            f"{s['pct_hours_exactly_zero']:.1f} % exactly zero\n"
-            f"mean {s['mean_wind_annual']:.2f} m/s",
-            transform=ax.transAxes, ha="right", va="top", fontsize=8.5, color=TEXT_PRIMARY)
+    ax.text(0.98, 0.50,
+            f"above the pivot:\n"
+            f"  station  {s['station_pct_hours_above_pivot']:.1f} %\n"
+            f"  local    {s['pct_hours_above_pivot']:.1f} %\n"
+            f"factor {s['wind_factor']:.3f} "
+            f"({s['wind_audit'].get('terrain_class', '?')}, "
+            f"z = {s['wind_audit'].get('surface_height_m', float('nan')):.2f} m)",
+            transform=ax.transAxes, ha="right", va="top", fontsize=8.2,
+            color=TEXT_PRIMARY)
 
     # 2 -- by hour of day ---------------------------------------------------
     ax = axes[0, 1]
@@ -498,6 +553,63 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
     add(f"![wind distribution]({png.name})")
     add("")
 
+    # --- Item 2: the sign, stated before anything else -----------------------
+    wf = s.get("wind_factor", 1.0)
+    aud = s.get("wind_audit", {}) or {}
+    add("## The sign of C2, on the terrain-corrected wind")
+    add("")
+    add(f"The h_ce correlation is now driven by the wind **local to the wall** — "
+        f"terrain `{aud.get('terrain_class', '?')}` "
+        f"(a = {aud.get('exponent_a', '?')}, "
+        f"δ = {aud.get('boundary_layer_delta_m', 0) or 0:.0f} m) at "
+        f"z = {aud.get('surface_height_m', float('nan')):.2f} m, a factor of "
+        f"**{wf:.4f}** on the 10 m station column.")
+    add("")
+    add("| | Station wind (as previously run) | Terrain-corrected (this run) |")
+    add("| --- | ---: | ---: |")
+    add(f"| Annual mean wind | {s['station_mean_wind_annual']:.2f} m/s | "
+        f"**{s['mean_wind_annual']:.2f} m/s** |")
+    add(f"| Hours above the 4 m/s pivot | "
+        f"{s['station_pct_hours_above_pivot']:.1f} % | "
+        f"**{s['pct_hours_above_pivot']:.1f} %** |")
+    add(f"| Mean h_ce implied | {s['station_mean_h_ce_annual']:.2f} W/(m²·K) "
+        f"({s['station_excess_annual']:+.2f} vs the ISO {H_CE_FIXED:.0f}) | "
+        f"**{s['mean_h_ce_annual']:.2f} W/(m²·K)** "
+        f"({s['excess_annual']:+.2f}) |")
+    add("")
+    if prior and "summary" in prior:
+        q = prior["summary"]
+        add(f"**C2 on sensible cooling: {q['delta_C']:+.2f} kWh before, "
+            f"{s['delta_C']:+.2f} kWh now.**")
+        add("")
+        reversed_sign = (q["delta_C"] < 0) != (s["delta_C"] < 0)
+        if reversed_sign:
+            add(f"**The sign reverses.** On the station wind C2 "
+                f"{'reduced' if q['delta_C'] < 0 else 'increased'} sensible "
+                f"cooling by {abs(q['delta_C']):.2f} kWh; on the terrain-corrected "
+                f"wind it {'reduces' if s['delta_C'] < 0 else 'increases'} it by "
+                f"{abs(s['delta_C']):.2f} kWh. The reported C2 result did rest on "
+                f"an unstated terrain assumption, and correcting that assumption "
+                f"flips the direction of the correction. This is the finding the "
+                f"task exists to establish, and it is stated as it fell.")
+        else:
+            add(f"**The sign does not reverse.** C2 "
+                f"{'reduces' if s['delta_C'] < 0 else 'increases'} sensible "
+                f"cooling both before and after the terrain correction. The "
+                f"margin by which it did not reverse: the local mean wind is "
+                f"{s['mean_wind_annual']:.2f} m/s against the "
+                f"{PIVOT_MS:.0f} m/s pivot, "
+                f"{s['pct_hours_above_pivot']:.1f} % of hours sit above it, and "
+                f"the magnitude moves from {q['delta_C']:+.2f} to "
+                f"{s['delta_C']:+.2f} kWh.")
+        add("")
+    else:
+        add(f"**C2 on sensible cooling: {s['delta_C']:+.2f} kWh** — it "
+            f"{'reduces' if s['delta_C'] < 0 else 'increases'} it. No prior "
+            f"summary was supplied via `--compare-to`, so the before/after "
+            f"contrast is omitted rather than retyped from memory.")
+        add("")
+
     # --- the three questions the task asks, answered in order ----------------
     add("## The three questions, answered")
     add("")
@@ -599,13 +711,24 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
         f"frozen value assumes — the opposite of what the RO file produced, where "
         f"h_ce collapsed to 4 W/(m²·K) across four fabricated dead-calm months.")
     add("")
-    add(f"Apt 305's only exposed surface is that west wall, solar absorptance 0.75. "
-        f"On a sunny afternoon it runs hotter than the air it faces, so a stronger "
-        f"external film sheds more of the absorbed solar back to the air, the "
-        f"sol-air driving temperature falls, and less heat is conducted inward. "
-        f"That is why the wind term {dirn_verb} sensible cooling by "
-        f"{abs(s['delta_C']):.2f} kWh here, and why the {dirn} is concentrated in "
-        f"the bands where the wind actually is.")
+    if s["delta_C"] < 0:
+        add(f"Apt 305's only exposed surface is that west wall, solar absorptance "
+            f"0.75. On a sunny afternoon it runs hotter than the air it faces, so "
+            f"a **stronger** external film sheds more of the absorbed solar back "
+            f"to the air, the sol-air driving temperature falls, and less heat is "
+            f"conducted inward. That is why the wind term {dirn_verb} sensible "
+            f"cooling by {abs(s['delta_C']):.2f} kWh here.")
+    else:
+        add(f"Apt 305's only exposed surface is that west wall, solar absorptance "
+            f"0.75. On a sunny afternoon it runs hotter than the air it faces, and "
+            f"a **weaker** external film sheds less of the absorbed solar back to "
+            f"the air: the sol-air driving temperature rises and more heat is "
+            f"conducted inward. With the local mean at "
+            f"{s['mean_wind_annual']:.2f} m/s the coefficient sits *below* the ISO "
+            f"constant for {100 - s['pct_hours_above_pivot']:.1f} % of the year, "
+            f"which is why the wind term {dirn_verb} sensible cooling by "
+            f"{abs(s['delta_C']):.2f} kWh here — the opposite of what the same "
+            f"correlation does on the unadjusted station column.")
     add("")
     add(f"The plant state moves with it: the wind term changes the cooling-plant "
         f"hour count by {s['n_cooling_dyn'] - s['n_cooling_fix']:+d} "
@@ -634,12 +757,23 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
     # --- before/after against the superseded run -----------------------------
     if prior and "summary" in prior:
         q = prior["summary"]
-        add("## Before and after: what the weather file was doing")
+        prior_name = Path(str(prior.get("weather", "prior run"))).name
+        same_file = prior_name == weather_name
+        add("## Before and after")
         add("")
-        add("Same engine, same building, same switch. The only difference is the "
-            "wind column.")
+        if same_file:
+            add("Same engine, same building, same weather file, same switch. The "
+                "only difference is that the h_ce correlation is now fed the wind "
+                "local to the wall rather than the raw 10 m station column.")
+        else:
+            add("Same engine, same building, same switch. The only difference is "
+                "the wind column.")
         add("")
-        add("| | RO 948680 (superseded) | Essendon 958660 (this run) |")
+        col_before = ("station wind (before)" if same_file
+                      else f"{prior_name} (superseded)")
+        col_after = ("terrain-corrected (this run)" if same_file
+                     else f"{weather_name} (this run)")
+        add(f"| | {col_before} | {col_after} |")
         add("| --- | ---: | ---: |")
         add(f"| Annual mean wind | {q['mean_wind_annual']:.2f} m/s | "
             f"{s['mean_wind_annual']:.2f} m/s |")
@@ -662,14 +796,19 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
             add(f"| Share of that from exactly-zero wind | "
                 f"{_pct(prior_zero['share_pct'])} | "
                 f"{_pct(zero_band['share_pct'])} |")
-        add(f"| Verdict | (c) — not explained by real wind | "
-            f"({verdict}) |")
+        add(f"| Verdict | ({prior.get('verdict', '?')}) | ({verdict}) |")
         add("")
-        add("The earlier open finding is therefore closed. It was correct as a "
-            "diagnosis — the RO cooling increase genuinely was not explained by "
-            "real wind — and the fix was the input, not the formula: "
-            "`simplecombined` returns `4 + 4u` and reduces to the ISO constant at "
-            "4 m/s exactly as documented, on both files.")
+        if same_file:
+            add("Nothing in the correlation moved. `simplecombined` still returns "
+                "`4 + 4u` and still reduces to the ISO constant at 4 m/s exactly. "
+                "What moved is the wind fed to it, and with it which side of the "
+                "pivot most of the year sits on.")
+        else:
+            add("The earlier open finding is therefore closed. It was correct as a "
+                "diagnosis — the RO cooling increase genuinely was not explained "
+                "by real wind — and the fix was the input, not the formula: "
+                "`simplecombined` returns `4 + 4u` and reduces to the ISO constant "
+                "at 4 m/s exactly as documented, on both files.")
         add("")
 
     if dead:
@@ -721,6 +860,12 @@ def main() -> None:
     ap.add_argument("--compare-to", default=None,
                     help="a wind_stats.json from an earlier run, for the "
                          "before/after contrast")
+    ap.add_argument("--no-wind-profile", action="store_true",
+                    help="force the h_ce correlation back onto the raw 10 m "
+                         "station column. This produces the 'before' state for "
+                         "the terrain question on THIS engine tree, which is the "
+                         "only honest comparison — an older wind_stats.json also "
+                         "carries every other change made since.")
     args = ap.parse_args()
 
     weather = str(Path(args.weather).resolve())
@@ -738,7 +883,7 @@ def main() -> None:
         assert_usable(Path(weather), expect_name_contains=args.expect_weather)
 
     print("controlled experiment — same engine, only the h_ce model differs:", flush=True)
-    d = measure(weather)
+    d = measure(weather, wind_profile=not args.no_wind_profile)
     s = summarise(d)
 
     print(f"\n  cooling  {s['C_fix']:.2f} kWh (ISO fixed)  ->  {s['C_dyn']:.2f} kWh "

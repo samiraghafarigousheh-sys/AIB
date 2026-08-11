@@ -31,6 +31,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -63,6 +64,20 @@ DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 # applies to. Both are read back off the building dictionary and asserted.
 ADJ_SETPOINT_C = 20.0
 
+# Storey height of the case, and therefore the wall's centroid height in the
+# generated IDF, whose zone origin sits at z = 0.
+HEIGHT_M = 2.7
+
+# EnergyPlus's Terrain keywords, by the ASHRAE class they resolve to. The
+# mapping runs this way round because the building dictionary declares the
+# ASHRAE class and the IDF has to be checked against it.
+EPLUS_TERRAIN_FOR_CLASS = {
+    "flat_open": "Ocean",
+    "open_country": "Country",
+    "suburban": "Suburbs",
+    "city_centre": "City",
+}
+
 SURFACE_TO_ISO = {
     "NorthWall": "North wall to Apt 306",
     "SouthWall": "South wall to Apt 304",
@@ -84,9 +99,33 @@ class Unmatchable(RuntimeError):
 # Alignment record for the MATCHED case
 # ---------------------------------------------------------------------------
 
-def alignment_rows(inf: dict, gains: dict) -> list[tuple[str, str, str, str]]:
+def alignment_rows(inf: dict, gains: dict, wind: dict | None = None) -> list[tuple[str, str, str, str]]:
     """(parameter, corrected ISO behaviour, EnergyPlus handling, status)."""
+    w = wind or {}
+    wa = w.get("audit") or {}
+    z = wa.get("surface_height_m", float("nan"))
+    fac = w.get("factor", float("nan"))
     return [
+        ("WIND — the fourth mismatch",
+         f"terrain '{wa.get('terrain_class', '?')}' (ASHRAE a = "
+         f"{wa.get('exponent_a', '?')}, delta = "
+         f"{wa.get('boundary_layer_delta_m', 0) or 0:.0f} m) at z = {z:.2f} m; "
+         f"station wind x {fac:.4f}, mean "
+         f"{w.get('local_mean_m_s', float('nan')):.2f} m/s. Feeds h_ce only",
+         f"Building Terrain = Suburbs, the same ASHRAE class; "
+         f"Site:HeightVariation absent so EnergyPlus derives (a, delta) from "
+         f"it; the whole geometry is translated up so the west wall's centroid "
+         f"lands on the same z = {z:.2f} m",
+         "FIXED"),
+
+        ("Wind fed to infiltration",
+         f"station wind, unadjusted (u_ref = {inf['u_ref']:.0f} m/s is a "
+         f"met-station reference and the LBL N = {inf['lbl_n']:.0f} already "
+         f"carries the shelter)",
+         "the ISO f(t) series is embedded as a schedule, so this is matched by "
+         "construction",
+         "ALIGNED"),
+
         ("Geometry / areas",
          "5.0 x 4.0 x 2.7 m, 1.62 m2 west glazing, 13.5 m2 outdoor-exposed envelope",
          "same, derived from the same apt305_building module",
@@ -322,7 +361,7 @@ from apt305_building import build_bui
 from pybuildingenergy.source.utils import (
     ISO52016, _envelope_area_m2, _zone_volume_m3, _q50_for_construction_age,
     _LBL_N_DIVISOR, _INF_C_STACK, _INF_C_WIND, _INF_DT_REF, _INF_U_REF,
-    _RHO_CP_AIR_WH_M3K,
+    _RHO_CP_AIR_WH_M3K, resolve_local_wind_factor,
 )
 from pybuildingenergy.source.check_input import sanitize_and_validate_BUI
 from pybuildingenergy.source.ventilation import VentilationInternalGains
@@ -369,6 +408,12 @@ if _override is not None:
     q50 = float(_override)
 n50 = q50 * a_env / volume
 n_inf_mean = n50 / _LBL_N_DIVISOR
+
+# --- the local-wind profile the h_ce correlation is driven by ----------------
+# Reported so the EnergyPlus side can be matched to it by construction rather
+# than by a copied number: the matched IDF places the zone at the height this
+# resolves to, and declares the terrain class this names.
+_wind_factor, _wind_audit = resolve_local_wind_factor(raw)
 
 # --- adjacent-zone conditioning, read back off the dictionary ---------------
 adj = [{"name": z.get("name"), "conditioned": bool(z.get("conditioned", False)),
@@ -442,6 +487,14 @@ json.dump({
     "gains_w": gains_w,
     "neighbour_multiplier_present": bool(_neighbour_multiplier_present),
     "adjacent_zones": adj,
+    "wind": {
+        "factor": float(_wind_factor),
+        "audit": {k: (float(v) if isinstance(v, (int, float)) and not isinstance(v, bool)
+                      else v)
+                  for k, v in _wind_audit.items()},
+        "station_mean_m_s": float(np.mean(wind)),
+        "local_mean_m_s": float(np.mean(wind) * _wind_factor),
+    },
     "infiltration": {
         "q50": q50, "a_env": a_env, "volume": volume, "n50": n50,
         "n_inf_mean": n_inf_mean, "lbl_n": float(_LBL_N_DIVISOR),
@@ -505,6 +558,55 @@ def _hourly_schedule(name: str, kind: str, values: list[float]) -> str:
     return "\n".join(rows)
 
 
+# Where the vertex list starts in each geometry object, 0-based, after splitting
+# the object body on commas. Both are fixed by the IDD, not by this builder.
+_VERTEX_START = {
+    "BuildingSurface:Detailed": 11,     # ... 10 = Number of Vertices
+    "FenestrationSurface:Detailed": 9,  # ...  8 = Number of Vertices
+}
+
+
+def raise_geometry(idf: str, dz: float) -> str:
+    """
+    Translate every surface vertex up by ``dz`` metres.
+
+    WHY THIS IS NEEDED. EnergyPlus evaluates its wind profile at each surface's
+    own centroid height. The IDF put a third-floor apartment's zone origin at
+    z = 0, so EnergyPlus drove the west wall's external film with the wind at
+    1.35 m -- a wind no part of this building ever sees. Nothing else in the
+    model reads the absolute height: there is no ground surface, no shading
+    geometry, no reflecting surface, and the view factor to ground is derived
+    from tilt. So this is a translation that moves the wind and nothing else,
+    which is precisely why it can be applied without disturbing the rest of the
+    matched case.
+    """
+    if abs(dz) < 1e-12:
+        return idf
+
+    out = idf
+    for kind, start in _VERTEX_START.items():
+        def _shift(m, start=start):
+            head, body = m.group(1), m.group(2)
+            fields = body.split(",")
+            # Guard the field layout rather than trusting it: a vertex count
+            # that does not match the numbers present means the offsets above
+            # are wrong for this object and every shifted z would be garbage.
+            coords = fields[start:]
+            if len(coords) % 3 != 0:
+                raise Unmatchable(
+                    f"{kind}: {len(coords)} vertex fields is not a multiple of 3; "
+                    f"the vertex list does not start where the IDD says it does")
+            for i in range(2, len(coords), 3):
+                z = float(coords[i])
+                # Preserve the original indentation/newlines around the value.
+                lead = coords[i][:len(coords[i]) - len(coords[i].lstrip())]
+                coords[i] = f"{lead}{z + dz:.6g}"
+            return head + ",".join(fields[:start] + coords) + ";"
+
+        out = re.sub(rf"(?is)({re.escape(kind)}\s*,)(.*?);", _shift, out)
+    return out
+
+
 def build_matched_idf(bui: dict, iso: dict, *, timestep: int = 6,
                       inf_mode: str = "iso-schedule") -> str:
     """The baseline IDF with the three corrected inputs substituted in."""
@@ -541,6 +643,37 @@ def build_matched_idf(bui: dict, iso: dict, *, timestep: int = 6,
 
     idf = build_idf(bui, adj_temp=adj_temp, timestep=timestep,
                     adj_mode="fixed", gains_w=gains)
+
+    # --- wind: match the two engines' external film ------------------------
+    # EnergyPlus already applies a terrain AND height profile by default (the
+    # Building object's Terrain field; Site:HeightVariation absent). The ISO
+    # engine now does too. Matching them is therefore two separate things:
+    #
+    #   terrain -- the builder writes Terrain = Suburbs, which is EnergyPlus's
+    #              spelling of the ASHRAE 'suburban' class the building
+    #              dictionary declares. Asserted below, not assumed.
+    #   height  -- the zone sits at z = 0 in the generated IDF, so a
+    #              third-floor apartment's wall was being evaluated at 1.35 m.
+    #              The whole geometry is translated up so the wall's centroid
+    #              lands on the height the ISO side resolved.
+    wind = iso.get("wind") or {}
+    audit = wind.get("audit") or {}
+    if audit.get("enabled"):
+        terrain = str(audit.get("terrain_class", ""))
+        if EPLUS_TERRAIN_FOR_CLASS.get(terrain) is None:
+            raise Unmatchable(
+                f"no EnergyPlus Terrain keyword corresponds to the declared "
+                f"terrain class {terrain!r}; the two engines cannot be matched "
+                f"on wind")
+        want = EPLUS_TERRAIN_FOR_CLASS[terrain]
+        if f", {want}," not in idf:
+            raise Unmatchable(
+                f"the IDF builder writes a Terrain field that is not {want!r}, "
+                f"which is EnergyPlus's spelling of the declared "
+                f"{terrain!r}; the wind profiles would differ")
+        z_iso = float(audit["surface_height_m"])
+        z_idf = HEIGHT_M / 2.0          # wall centroid with the zone origin at 0
+        idf = raise_geometry(idf, z_iso - z_idf)
 
     # --- infiltration -------------------------------------------------------
     design_flow = inf["design_flow_m3_s"]
@@ -936,7 +1069,7 @@ def _pct_s(v: float) -> str:
 
 
 def write_alignment(iso: dict, outdir: Path, epw_label: str) -> None:
-    rows = alignment_rows(iso["infiltration"], iso["gains_w"])
+    rows = alignment_rows(iso["infiltration"], iso["gains_w"], iso.get("wind"))
     inf = iso["infiltration"]
     lines = [
         "# Input alignment — the matched EnergyPlus case",
@@ -1658,7 +1791,7 @@ def main() -> None:
               f"({idf.count(chr(10)) + 1:,} lines)")
 
         write_alignment(iso, args.outdir, epw_label)
-        print(render_alignment(alignment_rows(iso["infiltration"], iso["gains_w"])))
+        print(render_alignment(alignment_rows(iso["infiltration"], iso["gains_w"], iso.get("wind"))))
 
         if args.audit_only:
             return

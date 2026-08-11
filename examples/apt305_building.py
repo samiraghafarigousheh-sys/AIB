@@ -112,6 +112,30 @@ def build_bui() -> dict:
             "construction_year": "1991-2005",
             "country": "Australia",
         },
+        # --- Site: terrain and height, for the local-wind profile ------------
+        # The EPW wind column is a 10 m reading over the open aerodrome at
+        # Essendon Fields. The correlation h_ce = 4 + 4u wants the wind at the
+        # wall, and 50 Barry St is dense inner-urban, three storeys up. Both
+        # differ from the station, so both are declared here rather than left
+        # to default -- terrain_class has no default at all, by design.
+        #
+        # 'suburban' (ASHRAE a = 0.22, delta = 370 m) is the class for "urban,
+        # suburban, wooded". Carlton is at the rougher end of that band and
+        # arguably borders 'city_centre'; because the classification is a
+        # judgement rather than a measurement, the effect of choosing each of
+        # the four classes is reported as a sensitivity rather than buried in
+        # this one line. See results/paper/wind_profile/.
+        #
+        # floor_level 3 with the declared 2.7 m storey height puts the wall
+        # mid-height at z = (3 - 0.5) x 2.7 = 6.75 m.
+        "site": {
+            "terrain_class": "suburban",
+            "floor_level": 3,
+            # Left at their defaults, but written out because they are
+            # assumptions about the *station*, not about this building:
+            "weather_station_terrain": "open_country",   # Essendon Fields, an aerodrome
+            "weather_station_sensor_height_m": 10.0,     # EPW convention
+        },
         "adjacent_zones": [
             {
                 "name": "apt_above",
