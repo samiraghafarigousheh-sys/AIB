@@ -35,6 +35,22 @@ correlation, and it was left open. This re-run is on Essendon Fields (WMO 958660
 ~8 km NW of the Carlton site, complete continuous record, no dead-calm month),
 which is what lets the question finally be answered on the physics.
 
+WHICH WIND (change 2b)
+----------------------
+The correlation is driven by the wind LOCAL TO THE WALL, not by the EPW column:
+the engine lifts the 10 m open-terrain station reading to the site's own terrain
+and height by the ASHRAE profile. Every statistic here that is about the
+correlation -- the pivot, the bands, the mean h_ce -- is therefore taken on the
+local series, and the station column is carried alongside for the contrast.
+
+``--no-wind-profile`` forces the correlation back onto the raw station column.
+That is the *before* state for the terrain question and has to be produced on
+this engine tree: an older wind_stats.json predates the closure fixes and would
+attribute those to the terrain correction. Run the two back to back:
+
+    ... --tag station --no-wind-profile
+    ... --tag terrain --compare-to <outdir>/wind_stats_station.json
+
 WHAT THIS TOOL DOES
 -------------------
 1. Characterises the EPW wind column: annual distribution against the pivot,
@@ -524,11 +540,17 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
     add("# Wind-speed diagnostic on the clean weather file — does the distribution "
         "explain the h_ce cooling change?")
     add("")
+    wf_hdr = s.get("wind_factor", 1.0)
     if weather_name:
-        add(f"Weather: `{weather_name}`. This **replaces the earlier verdict (c)**, "
-            "which was reached on `AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw` "
-            "and was a finding about that file's wind column rather than about the "
-            "correlation.")
+        add(f"Weather: `{weather_name}`. The h_ce correlation is driven by "
+            + (f"the **wind local to the wall** — the station column × "
+               f"{wf_hdr:.4f} for terrain and height."
+               if abs(wf_hdr - 1.0) > 1e-9 else
+               "the **raw 10 m station column**, unadjusted for terrain or "
+               "height. This is the *before* state for the wind-profile "
+               "question, produced on the current engine tree so that the "
+               "contrast isolates the wind and nothing else.")
+            )
         add("")
     add(f"## Verdict: **({verdict})**")
     add("")
@@ -696,7 +718,7 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
         f"comes from hours with real, non-zero wind**, and the above-pivot band "
         f"alone carries {above_band['extra_cooling_kWh']:+.2f} kWh "
         f"({above_band['share_pct']:.1f} %) over {above_band['hours']:,} hours. "
-        f"The exactly-zero bucket — the entire content of the earlier finding — is "
+        f"The exactly-zero bucket is "
         f"now {zero_band['hours']:,} hours and "
         f"{zero_band['extra_cooling_kWh']:+.2f} kWh, "
         f"{_pct(abs(zero_band['share_pct']))} of the total.")
@@ -704,12 +726,20 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
 
     add("## The mechanism")
     add("")
-    add(f"With {s['pct_hours_above_pivot']:.1f} % of hours above the pivot the "
-        f"dynamic coefficient sits **above** the ISO constant for most of the year "
-        f"(mean {s['mean_h_ce_annual']:.2f} against 20 W/(m²·K)), so the exposed "
-        f"west wall is coupled *more* tightly to outdoor air than ISO 13789's "
-        f"frozen value assumes — the opposite of what the RO file produced, where "
-        f"h_ce collapsed to 4 W/(m²·K) across four fabricated dead-calm months.")
+    if s["excess_annual"] > 0:
+        add(f"With {s['pct_hours_above_pivot']:.1f} % of hours above the pivot the "
+            f"dynamic coefficient sits **above** the ISO constant on the year "
+            f"(mean {s['mean_h_ce_annual']:.2f} against {H_CE_FIXED:.0f} W/(m²·K)), "
+            f"so the exposed west wall is coupled *more* tightly to outdoor air "
+            f"than ISO 13789's frozen value assumes.")
+    else:
+        add(f"With only {s['pct_hours_above_pivot']:.1f} % of hours above the "
+            f"pivot the dynamic coefficient sits **below** the ISO constant on the "
+            f"year (mean {s['mean_h_ce_annual']:.2f} against "
+            f"{H_CE_FIXED:.0f} W/(m²·K)), so the exposed west wall is coupled "
+            f"*less* tightly to outdoor air than ISO 13789's frozen value assumes. "
+            f"ISO 13789 §9.5 freezes 4 m/s, which is a met-station speed; a wall "
+            f"in suburban terrain three storeys up does not see it.")
     add("")
     if s["delta_C"] < 0:
         add(f"Apt 305's only exposed surface is that west wall, solar absorptance "
@@ -738,9 +768,8 @@ def write_verdict(s: dict, out_md: Path, png: Path, weather_name: str = "",
         add(f"Of the hours the dynamic model adds to the cooling plant "
             f"({s['n_cooling_hours_added']}), the mean wind is "
             f"{s.get('mean_wind_added_hours', float('nan')):.2f} m/s and "
-            f"{s.get('pct_zero_added_hours', float('nan')):.1f} % read exactly zero — "
-            f"against 96 % on the RO file, where the added hours *were* the "
-            f"fabricated calms.")
+            f"{s.get('pct_zero_added_hours', float('nan')):.1f} % read exactly "
+            f"zero.")
     add("")
 
     add("## Month by month")
