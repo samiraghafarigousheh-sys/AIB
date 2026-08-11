@@ -1,0 +1,502 @@
+{
+  "results": {
+    "Base": {
+      "config": "B",
+      "net_floor_area_m2": 20.0,
+      "time_step_h": 1.0,
+      "Q_H_sensible_kWh": 1779.360276066416,
+      "Q_C_sensible_kWh": 640.8369660455513,
+      "Q_C_latent_kWh": 26.12147101507936,
+      "Q_H_latent_kWh": 152.65064609492043,
+      "Q_C_latent_ungated_kWh": 900.051690511355,
+      "Q_H_latent_ungated_kWh": 697.0178345011337,
+      "Q_sensible_total_kWh": 2420.197242111967,
+      "Q_latent_total_kWh": 178.77211710999978,
+      "Q_need_total_kWh": 2598.969359221967,
+      "Q_sensible_total_kWh_per_sqm": 121.00986210559836,
+      "Q_latent_total_kWh_per_sqm": 8.93860585549999,
+      "Q_need_total_kWh_per_sqm": 129.94846796109834,
+      "Q_H_sensible_kWh_per_sqm": 88.9680138033208,
+      "Q_C_sensible_kWh_per_sqm": 32.041848302277565,
+      "n_steps": 8760,
+      "n_steps_cooling_on": 851,
+      "n_steps_heating_on": 2790,
+      "n_steps_latent_charged": 178,
+      "latent_kWh_with_cooling_off": 0.0,
+      "latent_kWh_while_heating": 0.0,
+      "monthly_latent_cooling_kWh": [
+        13.43255597435034,
+        5.243953398860601,
+        2.8921829596743716,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.8205287214743692,
+        3.7322499607196855
+      ],
+      "Q_internal_gains_kWh": 5356.685952,
+      "Q_solar_gains_kWh": 810.5399874668723,
+      "Q_ve_loss_kWh": 2031.9092286368234,
+      "Q_ve_gain_kWh": 79.69288868577316,
+      "Q_tb_loss_kWh": 2.096958560758398,
+      "Q_ground_loss_kWh": 98.97550202732344,
+      "Q_ground_gain_kWh": 2.25760033151989,
+      "Q_tr_total_loss_kWh": 5398.239506491121,
+      "Q_tr_total_gain_kWh": 46.7213113466146,
+      "Q_tr_opaque_loss_kWh": 429.6143082046166,
+      "Q_tr_window_loss_kWh": 334.33299992527725,
+      "Q_tr_adjacent_loss_kWh": 4864.293313066339,
+      "Q_tr_adjacent_gain_kWh": 2.400251232632442,
+      "sankey": {
+        "inputs_Wh": {
+          "Heating": 1779360.276066414,
+          "Internal gains": 5356685.952000037,
+          "Solar & free-gain": 1169512.7961416377
+        },
+        "outputs_Wh": {
+          "Cooling (extracted energy)": 640836.9660455512,
+          "Ventilation (losses)": 2031909.2286368196,
+          "Thermal bridges": 2096.9585607584027,
+          "Ground": 98975.5020273237,
+          "Transmission - West exterior wall (opaque)": 429614.3082046156,
+          "Transmission - North wall to Apt 306": 819912.2274423105,
+          "Transmission - South wall to Apt 304": 819912.2274423097,
+          "Transmission - East wall to corridor": 1109040.521262182,
+          "Transmission - Floor to Apt 205": 1057822.9931783515,
+          "Transmission - Ceiling to Apt 405": 1057822.9931783509,
+          "Transmission - West window - fixed + West window - operable": 334332.99992527737
+        },
+        "republished_residual_Wh": 0.0,
+        "storage_Wh": 0.0,
+        "inputs_total_Wh": 8305559.024208088,
+        "outputs_total_Wh": 8402276.925903851,
+        "residual_Wh": -96717.90169576276,
+        "residual_kWh": -96.71790169576276,
+        "residual_pct": -1.164495988937777,
+        "n_transmission_items": 7,
+        "transmission_items_kWh": {
+          "Transmission - West exterior wall (opaque)": 429.6143082046156,
+          "Transmission - North wall to Apt 306": 819.9122274423105,
+          "Transmission - South wall to Apt 304": 819.9122274423097,
+          "Transmission - East wall to corridor": 1109.040521262182,
+          "Transmission - Floor to Apt 205": 1057.8229931783515,
+          "Transmission - Ceiling to Apt 405": 1057.8229931783508,
+          "Transmission - West window - fixed + West window - operable": 334.33299992527736
+        },
+        "surface_iso_types": {
+          "West exterior wall (opaque)": "OP",
+          "North wall to Apt 306": "ADJ",
+          "South wall to Apt 304": "ADJ",
+          "East wall to corridor": "ADJ",
+          "Floor to Apt 205": "ADJ",
+          "Ceiling to Apt 405": "ADJ",
+          "West window - fixed + West window - operable": "W"
+        },
+        "transmission_reported_kWh": 5628.458270633398,
+        "transmission_independent_kWh": 5628.458270633391,
+        "transmission_rel_diff": 1.1311202120174996e-15
+      }
+    },
+    "C1 \u00b7 ventilation": {
+      "config": "B",
+      "net_floor_area_m2": 20.0,
+      "time_step_h": 1.0,
+      "Q_H_sensible_kWh": 2184.9295482807465,
+      "Q_C_sensible_kWh": 496.8105294966193,
+      "Q_C_latent_kWh": 26.65885929233737,
+      "Q_H_latent_kWh": 183.93704417457178,
+      "Q_C_latent_ungated_kWh": 1141.0705051875684,
+      "Q_H_latent_ungated_kWh": 701.4101903110998,
+      "Q_sensible_total_kWh": 2681.740077777366,
+      "Q_latent_total_kWh": 210.59590346690916,
+      "Q_need_total_kWh": 2892.335981244275,
+      "Q_sensible_total_kWh_per_sqm": 134.0870038888683,
+      "Q_latent_total_kWh_per_sqm": 10.529795173345459,
+      "Q_need_total_kWh_per_sqm": 144.61679906221374,
+      "Q_H_sensible_kWh_per_sqm": 109.24647741403733,
+      "Q_C_sensible_kWh_per_sqm": 24.840526474830966,
+      "n_steps": 8760,
+      "n_steps_cooling_on": 712,
+      "n_steps_heating_on": 3120,
+      "n_steps_latent_charged": 160,
+      "latent_kWh_with_cooling_off": 0.0,
+      "latent_kWh_while_heating": 0.0,
+      "monthly_latent_cooling_kWh": [
+        14.879250524273143,
+        5.540557911356421,
+        2.9329122651907062,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.757612798333189,
+        2.548525793183913
+      ],
+      "Q_internal_gains_kWh": 5356.685952,
+      "Q_solar_gains_kWh": 810.5399874668723,
+      "Q_ve_loss_kWh": 2887.9061458550227,
+      "Q_ve_gain_kWh": 21.804631825465616,
+      "Q_tb_loss_kWh": 1.9199559810226283,
+      "Q_ground_loss_kWh": 90.51891817284648,
+      "Q_ground_gain_kWh": 3.054298417778072,
+      "Q_tr_total_loss_kWh": 5033.827478183363,
+      "Q_tr_total_gain_kWh": 46.418911689082464,
+      "Q_tr_opaque_loss_kWh": 408.72607325476525,
+      "Q_tr_window_loss_kWh": 316.3174936991888,
+      "Q_tr_adjacent_loss_kWh": 4557.648668651624,
+      "Q_tr_adjacent_gain_kWh": 2.3968136493457566,
+      "sankey": {
+        "inputs_Wh": {
+          "Heating": 2184929.548280749,
+          "Internal gains": 5356685.952000037,
+          "Solar & free-gain": 1130966.8576948177
+        },
+        "outputs_Wh": {
+          "Cooling (extracted energy)": 496810.529496619,
+          "Ventilation (losses)": 2887906.1458550394,
+          "Thermal bridges": 1919.9559810226338,
+          "Ground": 90518.9181728469,
+          "Transmission - West exterior wall (opaque)": 408726.0732547667,
+          "Transmission - North wall to Apt 306": 770607.5095142808,
+          "Transmission - South wall to Apt 304": 770607.509514281,
+          "Transmission - East wall to corridor": 1046598.9139336115,
+          "Transmission - Floor to Apt 205": 985016.9641544992,
+          "Transmission - Ceiling to Apt 405": 985016.9641544989,
+          "Transmission - West window - fixed + West window - operable": 316317.49369918887
+        },
+        "republished_residual_Wh": 0.0,
+        "storage_Wh": 0.0,
+        "inputs_total_Wh": 8672582.357975604,
+        "outputs_total_Wh": 8760046.977730656,
+        "residual_Wh": -87464.61975505203,
+        "residual_kWh": -87.46461975505203,
+        "residual_pct": -1.008518756522578,
+        "n_transmission_items": 7,
+        "transmission_items_kWh": {
+          "Transmission - West exterior wall (opaque)": 408.7260732547667,
+          "Transmission - North wall to Apt 306": 770.6075095142809,
+          "Transmission - South wall to Apt 304": 770.607509514281,
+          "Transmission - East wall to corridor": 1046.5989139336116,
+          "Transmission - Floor to Apt 205": 985.0169641544992,
+          "Transmission - Ceiling to Apt 405": 985.0169641544989,
+          "Transmission - West window - fixed + West window - operable": 316.31749369918884
+        },
+        "surface_iso_types": {
+          "West exterior wall (opaque)": "OP",
+          "North wall to Apt 306": "ADJ",
+          "South wall to Apt 304": "ADJ",
+          "East wall to corridor": "ADJ",
+          "Floor to Apt 205": "ADJ",
+          "Ceiling to Apt 405": "ADJ",
+          "West window - fixed + West window - operable": "W"
+        },
+        "transmission_reported_kWh": 5282.891428225127,
+        "transmission_independent_kWh": 5282.891428225124,
+        "transmission_rel_diff": 5.164755214807553e-16
+      }
+    },
+    "C2 \u00b7 latent": {
+      "config": "B",
+      "net_floor_area_m2": 20.0,
+      "time_step_h": 1.0,
+      "Q_H_sensible_kWh": 1779.360276066416,
+      "Q_C_sensible_kWh": 640.8369660455513,
+      "Q_C_latent_kWh": 18.209144419047007,
+      "Q_H_latent_kWh": 0.0,
+      "Q_C_latent_ungated_kWh": 512.0217051942868,
+      "Q_H_latent_ungated_kWh": 4.4846875720117785,
+      "Q_sensible_total_kWh": 2420.197242111967,
+      "Q_latent_total_kWh": 18.209144419047007,
+      "Q_need_total_kWh": 2438.406386531014,
+      "Q_sensible_total_kWh_per_sqm": 121.00986210559836,
+      "Q_latent_total_kWh_per_sqm": 0.9104572209523504,
+      "Q_need_total_kWh_per_sqm": 121.9203193265507,
+      "Q_H_sensible_kWh_per_sqm": 88.9680138033208,
+      "Q_C_sensible_kWh_per_sqm": 32.041848302277565,
+      "n_steps": 8760,
+      "n_steps_cooling_on": 851,
+      "n_steps_heating_on": 2790,
+      "n_steps_latent_charged": 811,
+      "latent_kWh_with_cooling_off": 0.0,
+      "latent_kWh_while_heating": 0.0,
+      "monthly_latent_cooling_kWh": [
+        6.478318687796507,
+        3.220152500047631,
+        2.1814415082178717,
+        0.6031647861448282,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.36790701533639286,
+        0.6686562444444446,
+        1.2441102319542658,
+        3.4453934451050645
+      ],
+      "Q_internal_gains_kWh": 5356.685952,
+      "Q_solar_gains_kWh": 810.5399874668723,
+      "Q_ve_loss_kWh": 2031.9092286368234,
+      "Q_ve_gain_kWh": 79.69288868577316,
+      "Q_tb_loss_kWh": 2.096958560758398,
+      "Q_ground_loss_kWh": 98.97550202732344,
+      "Q_ground_gain_kWh": 2.25760033151989,
+      "Q_tr_total_loss_kWh": 5398.239506491121,
+      "Q_tr_total_gain_kWh": 46.7213113466146,
+      "Q_tr_opaque_loss_kWh": 429.6143082046166,
+      "Q_tr_window_loss_kWh": 334.33299992527725,
+      "Q_tr_adjacent_loss_kWh": 4864.293313066339,
+      "Q_tr_adjacent_gain_kWh": 2.400251232632442,
+      "sankey": {
+        "inputs_Wh": {
+          "Heating": 1779360.276066414,
+          "Internal gains": 5356685.952000037,
+          "Solar & free-gain": 1169512.7961416377
+        },
+        "outputs_Wh": {
+          "Cooling (extracted energy)": 640836.9660455512,
+          "Ventilation (losses)": 2031909.2286368196,
+          "Thermal bridges": 2096.9585607584027,
+          "Ground": 98975.5020273237,
+          "Transmission - West exterior wall (opaque)": 429614.3082046156,
+          "Transmission - North wall to Apt 306": 819912.2274423105,
+          "Transmission - South wall to Apt 304": 819912.2274423097,
+          "Transmission - East wall to corridor": 1109040.521262182,
+          "Transmission - Floor to Apt 205": 1057822.9931783515,
+          "Transmission - Ceiling to Apt 405": 1057822.9931783509,
+          "Transmission - West window - fixed + West window - operable": 334332.99992527737
+        },
+        "republished_residual_Wh": 0.0,
+        "storage_Wh": 0.0,
+        "inputs_total_Wh": 8305559.024208088,
+        "outputs_total_Wh": 8402276.925903851,
+        "residual_Wh": -96717.90169576276,
+        "residual_kWh": -96.71790169576276,
+        "residual_pct": -1.164495988937777,
+        "n_transmission_items": 7,
+        "transmission_items_kWh": {
+          "Transmission - West exterior wall (opaque)": 429.6143082046156,
+          "Transmission - North wall to Apt 306": 819.9122274423105,
+          "Transmission - South wall to Apt 304": 819.9122274423097,
+          "Transmission - East wall to corridor": 1109.040521262182,
+          "Transmission - Floor to Apt 205": 1057.8229931783515,
+          "Transmission - Ceiling to Apt 405": 1057.8229931783508,
+          "Transmission - West window - fixed + West window - operable": 334.33299992527736
+        },
+        "surface_iso_types": {
+          "West exterior wall (opaque)": "OP",
+          "North wall to Apt 306": "ADJ",
+          "South wall to Apt 304": "ADJ",
+          "East wall to corridor": "ADJ",
+          "Floor to Apt 205": "ADJ",
+          "Ceiling to Apt 405": "ADJ",
+          "West window - fixed + West window - operable": "W"
+        },
+        "transmission_reported_kWh": 5628.458270633398,
+        "transmission_independent_kWh": 5628.458270633391,
+        "transmission_rel_diff": 1.1311202120174996e-15
+      }
+    },
+    "C3 \u00b7 both": {
+      "config": "B",
+      "net_floor_area_m2": 20.0,
+      "time_step_h": 1.0,
+      "Q_H_sensible_kWh": 2184.9295482807465,
+      "Q_C_sensible_kWh": 496.8105294966193,
+      "Q_C_latent_kWh": 15.528139309657115,
+      "Q_H_latent_kWh": 0.0028963132190944043,
+      "Q_C_latent_ungated_kWh": 631.4735346520229,
+      "Q_H_latent_ungated_kWh": 5.197706739558843,
+      "Q_sensible_total_kWh": 2681.740077777366,
+      "Q_latent_total_kWh": 15.53103562287621,
+      "Q_need_total_kWh": 2697.271113400242,
+      "Q_sensible_total_kWh_per_sqm": 134.0870038888683,
+      "Q_latent_total_kWh_per_sqm": 0.7765517811438105,
+      "Q_need_total_kWh_per_sqm": 134.8635556700121,
+      "Q_H_sensible_kWh_per_sqm": 109.24647741403733,
+      "Q_C_sensible_kWh_per_sqm": 24.840526474830966,
+      "n_steps": 8760,
+      "n_steps_cooling_on": 712,
+      "n_steps_heating_on": 3120,
+      "n_steps_latent_charged": 674,
+      "latent_kWh_with_cooling_off": 0.0,
+      "latent_kWh_while_heating": 0.0,
+      "monthly_latent_cooling_kWh": [
+        6.177333428696894,
+        2.8612137689336556,
+        1.7659146009768123,
+        0.4669683887475765,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.2376784702722015,
+        0.4801364222222223,
+        0.9328788567249147,
+        2.606015373082839
+      ],
+      "Q_internal_gains_kWh": 5356.685952,
+      "Q_solar_gains_kWh": 810.5399874668723,
+      "Q_ve_loss_kWh": 2887.9061458550227,
+      "Q_ve_gain_kWh": 21.804631825465616,
+      "Q_tb_loss_kWh": 1.9199559810226283,
+      "Q_ground_loss_kWh": 90.51891817284648,
+      "Q_ground_gain_kWh": 3.054298417778072,
+      "Q_tr_total_loss_kWh": 5033.827478183363,
+      "Q_tr_total_gain_kWh": 46.418911689082464,
+      "Q_tr_opaque_loss_kWh": 408.72607325476525,
+      "Q_tr_window_loss_kWh": 316.3174936991888,
+      "Q_tr_adjacent_loss_kWh": 4557.648668651624,
+      "Q_tr_adjacent_gain_kWh": 2.3968136493457566,
+      "sankey": {
+        "inputs_Wh": {
+          "Heating": 2184929.548280749,
+          "Internal gains": 5356685.952000037,
+          "Solar & free-gain": 1130966.8576948177
+        },
+        "outputs_Wh": {
+          "Cooling (extracted energy)": 496810.529496619,
+          "Ventilation (losses)": 2887906.1458550394,
+          "Thermal bridges": 1919.9559810226338,
+          "Ground": 90518.9181728469,
+          "Transmission - West exterior wall (opaque)": 408726.0732547667,
+          "Transmission - North wall to Apt 306": 770607.5095142808,
+          "Transmission - South wall to Apt 304": 770607.509514281,
+          "Transmission - East wall to corridor": 1046598.9139336115,
+          "Transmission - Floor to Apt 205": 985016.9641544992,
+          "Transmission - Ceiling to Apt 405": 985016.9641544989,
+          "Transmission - West window - fixed + West window - operable": 316317.49369918887
+        },
+        "republished_residual_Wh": 0.0,
+        "storage_Wh": 0.0,
+        "inputs_total_Wh": 8672582.357975604,
+        "outputs_total_Wh": 8760046.977730656,
+        "residual_Wh": -87464.61975505203,
+        "residual_kWh": -87.46461975505203,
+        "residual_pct": -1.008518756522578,
+        "n_transmission_items": 7,
+        "transmission_items_kWh": {
+          "Transmission - West exterior wall (opaque)": 408.7260732547667,
+          "Transmission - North wall to Apt 306": 770.6075095142809,
+          "Transmission - South wall to Apt 304": 770.607509514281,
+          "Transmission - East wall to corridor": 1046.5989139336116,
+          "Transmission - Floor to Apt 205": 985.0169641544992,
+          "Transmission - Ceiling to Apt 405": 985.0169641544989,
+          "Transmission - West window - fixed + West window - operable": 316.31749369918884
+        },
+        "surface_iso_types": {
+          "West exterior wall (opaque)": "OP",
+          "North wall to Apt 306": "ADJ",
+          "South wall to Apt 304": "ADJ",
+          "East wall to corridor": "ADJ",
+          "Floor to Apt 205": "ADJ",
+          "Ceiling to Apt 405": "ADJ",
+          "West window - fixed + West window - operable": "W"
+        },
+        "transmission_reported_kWh": 5282.891428225127,
+        "transmission_independent_kWh": 5282.891428225124,
+        "transmission_rel_diff": 5.164755214807553e-16
+      }
+    }
+  },
+  "provenance": {
+    "Base": {
+      "branch": null,
+      "note": "unmodified ISO 52016-1, as vendored",
+      "resolved": [
+        "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+        ".gitignore",
+        "colab_closed_balance.ipynb"
+      ]
+    },
+    "C1 \u00b7 ventilation": {
+      "branch": "claude/ventilation-infiltration-fix",
+      "note": "ventilation / infiltration fix alone \u2014 additive H_ve_inf term",
+      "resolved": [
+        "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+        ".gitignore",
+        "colab_closed_balance.ipynb"
+      ]
+    },
+    "C2 \u00b7 latent": {
+      "branch": "claude/latent-heat-fix",
+      "note": "latent fix alone \u2014 EN 16798-1 deadband, occupancy moisture, dt_h",
+      "resolved": [
+        "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+        ".gitignore",
+        "colab_closed_balance.ipynb"
+      ]
+    },
+    "C3 \u00b7 both": {
+      "branch": "claude/ventilation-plus-latent-fix",
+      "note": "both fixes together",
+      "resolved": [
+        "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+        ".gitignore",
+        "colab_closed_balance.ipynb"
+      ]
+    }
+  },
+  "weather": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+  "closure_commits": [
+    "6e549fa18c04d90c33c5bf29d262947efbf8915d",
+    "82a909d3f3e91108fc374dd86ddc177157330866",
+    "9fd8c696c4bd659b866fdac4afd49217c443ae21",
+    "09357302f5d16ee490d21c58b51c3685f55de972"
+  ],
+  "summary": {
+    "sensible_separates": true,
+    "latent_interaction_kWh": -3.218393386647902,
+    "latent_cooling": {
+      "Base": 26.12147101507936,
+      "C1 \u00b7 ventilation": 26.65885929233737,
+      "C2 \u00b7 latent": 18.209144419047007,
+      "C3 \u00b7 both": 15.528139309657115
+    },
+    "base_reconciliation_max_abs_kWh": 0.0,
+    "provenance": {
+      "Base": {
+        "branch": null,
+        "note": "unmodified ISO 52016-1, as vendored",
+        "resolved": [
+          "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+          ".gitignore",
+          "colab_closed_balance.ipynb"
+        ]
+      },
+      "C1 \u00b7 ventilation": {
+        "branch": "claude/ventilation-infiltration-fix",
+        "note": "ventilation / infiltration fix alone \u2014 additive H_ve_inf term",
+        "resolved": [
+          "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+          ".gitignore",
+          "colab_closed_balance.ipynb"
+        ]
+      },
+      "C2 \u00b7 latent": {
+        "branch": "claude/latent-heat-fix",
+        "note": "latent fix alone \u2014 EN 16798-1 deadband, occupancy moisture, dt_h",
+        "resolved": [
+          "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+          ".gitignore",
+          "colab_closed_balance.ipynb"
+        ]
+      },
+      "C3 \u00b7 both": {
+        "branch": "claude/ventilation-plus-latent-fix",
+        "note": "both fixes together",
+        "resolved": [
+          "pybuildingenergy/src/pybuildingenergy/source/check_input.py",
+          ".gitignore",
+          "colab_closed_balance.ipynb"
+        ]
+      }
+    }
+  }
+}

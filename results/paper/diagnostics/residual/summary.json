@@ -1,0 +1,9 @@
+{
+  "residual": {
+    "gate_ok": true,
+    "items_ok": true,
+    "reint_ok": true,
+    "worst_pct": -1.7701484926960818,
+    "worst_state": "+Conditioned zones"
+  }
+}
