@@ -1,0 +1,496 @@
+{
+ "head": "65fde6c",
+ "engine_source_dirty": false,
+ "uncommitted_paths": [
+  "results/paper/ENGINE_AUDIT.json",
+  "tools/diagnostics/engine_audit.py"
+ ],
+ "weather": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+ "provenance": [
+  {
+   "sha": "a66eec7d7",
+   "subject": "Change 1: dynamic window properties (U_win(t) and angular g_win)",
+   "ancestor_of_head": true,
+   "source": "def karlsson_roos_direct_factor(theta_deg, coeffs) -> float | np.ndarray:",
+   "n": 1,
+   "name": "C1 \u2014 dynamic window transmittance",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 3143,
+   "anchor": "karlsson_roos_direct_factor, the angular beam model"
+  },
+  {
+   "sha": "56f5d0883",
+   "subject": "Change 2: wind-dependent surface heat transfer coefficients",
+   "ancestor_of_head": true,
+   "source": "def _resolve_opaque_convection_model(building_object, override=None) -> str:",
+   "n": 2,
+   "name": "C2 \u2014 wind-dependent external h_ce",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 3063,
+   "anchor": "_resolve_opaque_convection_model, which defaults opaque surfaces to 4+4u"
+  },
+  {
+   "sha": "fab0ab0d4",
+   "subject": "Wind profile: drive h_ce with the wind local to the surface, not the station",
+   "ancestor_of_head": true,
+   "source": "def local_wind_speed_factor(",
+   "n": 3,
+   "name": "C2b \u2014 ASHRAE terrain and height wind profile",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 2313,
+   "anchor": "local_wind_speed_factor, the two-layer profile"
+  },
+  {
+   "sha": "107983200",
+   "subject": "Ventilation/infiltration fix: additive H_ve_inf term",
+   "ancestor_of_head": true,
+   "source": "    return float(_RHO_CP_AIR_WH_M3K * volume * n_inf)",
+   "n": 4,
+   "name": "Ventilation \u2014 additive infiltration path",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 636,
+   "anchor": "the H_ve_inf return, rho*cp*V*n_inf(t)"
+  },
+  {
+   "sha": "c641378a9",
+   "subject": "Item 1 (A1): supply infiltration air at outdoor temperature",
+   "ancestor_of_head": true,
+   "source": "                    # A1 fix: envelope-leakage air is outdoor air, so it contributes",
+   "n": 5,
+   "name": "Infiltration A1 \u2014 supply temperature at theta_e",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 9160,
+   "anchor": "the A1 source-term addition, S_ve += H_ve_inf * theta_e"
+  },
+  {
+   "sha": "bb678a9dd",
+   "subject": "Item 2 (A3): scope infiltration envelope area to outdoor-exposed surfaces",
+   "ancestor_of_head": true,
+   "source": "    assembly (``_surface_side_b_is_outdoor_air``), so the leakage envelope cannot",
+   "n": 6,
+   "name": "Infiltration A3 \u2014 envelope scoped to outdoor-exposed",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 525,
+   "anchor": "the outdoor-air classification used to scope A_env"
+  },
+  {
+   "sha": "421c2823c",
+   "subject": "Item 3: recalibrate envelope permeability q50 to Australian data",
+   "ancestor_of_head": true,
+   "source": "    \"1991-2005\": 14.0,     # derived 2006-2015 stock, upper (11-14); pre-2006 practice",
+   "n": 7,
+   "name": "Infiltration \u2014 Australian q50 age bands",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 460,
+   "anchor": "the recalibrated \"1991-2005\": 14.0 band"
+  },
+  {
+   "sha": "8263fca5f",
+   "subject": "Latent heat fix: EN 16798-1 deadband, occupancy moisture, dt_h, evaporative mode",
+   "ancestor_of_head": true,
+   "source": "    rh_int_min_pct: float | None = None,",
+   "n": 8,
+   "name": "Latent \u2014 deadband, occupant moisture, dt, sign",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 64,
+   "anchor": "the rh_int_min_pct deadband parameter"
+  },
+  {
+   "sha": "82a909d3f",
+   "subject": "Defect B: gate latent conditioning to hours the plant actually runs",
+   "ancestor_of_head": true,
+   "source": "            _cooling_on = _q_c_sens > 0.0",
+   "n": 9,
+   "name": "Latent \u2014 plant-operation gate",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 10088,
+   "anchor": "_cooling_on, the gate the latent charge is masked by"
+  },
+  {
+   "sha": "5aca6ce43",
+   "subject": "Internal gains: stop scaling the zone's own gain by neighbour count",
+   "ancestor_of_head": true,
+   "source": "        # and nothing else, however many neighbours the zone has.",
+   "n": 10,
+   "name": "Internal gains \u2014 neighbour-count de-inflation",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/ventilation.py",
+   "line": 632,
+   "anchor": "the note and code dropping the per-neighbour scaling"
+  },
+  {
+   "sha": "73390763d",
+   "subject": "Adjacent zones: hold conditioned neighbours at their setpoint",
+   "ancestor_of_head": true,
+   "source": "        if conditioned and setpoint is not None:",
+   "n": 11,
+   "name": "Adjacent zones \u2014 conditioned-neighbour branch",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 962,
+   "anchor": "the branch holding theta_ztu at the declared setpoint"
+  },
+  {
+   "sha": "418496bf2",
+   "subject": "Ground contact: absence of a ground surface means no ground contact",
+   "ancestor_of_head": true,
+   "source": "    Absence of a ground surface means \"no ground contact\", not \"assume the whole",
+   "n": 12,
+   "name": "Ground contact \u2014 no implicit slab-on-ground fallback",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 1311,
+   "anchor": "_ground_contact_area: absence of a ground surface means none"
+  },
+  {
+   "sha": "ef312fe42",
+   "subject": "Ground: pick the coldest month from the hemisphere, not January",
+   "ancestor_of_head": true,
+   "source": "    return COLDEST_MONTH_SOUTHERN if latitude < 0.0 else COLDEST_MONTH_NORTHERN",
+   "n": 13,
+   "name": "Ground temperature \u2014 hemisphere-resolved coldest month",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 887,
+   "anchor": "the latitude-sign return"
+  },
+  {
+   "sha": "9fd8c696c",
+   "subject": "Upstream: a surface is ground contact only when it declares a ground boundary",
+   "ancestor_of_head": true,
+   "source": "    explicit ``boundary == \"GROUND\"`` (consistent with ``_ground_contact_area``,",
+   "n": 14,
+   "name": "Classification \u2014 ground class needs a declared boundary",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 1165,
+   "anchor": "the 'declared to be' guard replacing the sky-view inference"
+  },
+  {
+   "sha": "6e549fa18",
+   "subject": "Defect A: tally ADJ surface transmission and close the Sankey control volume",
+   "ancestor_of_head": true,
+   "source": "        \"Q_tr_adjacent\": (\"Q_tr_adjacent_loss_kWh\", \"Q_tr_adjacent_gain_kWh\"),",
+   "n": 15,
+   "name": "Closure \u2014 ADJ transmission in the inventory",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 1255,
+   "anchor": "the Q_tr_adjacent loss/gain line item"
+  },
+  {
+   "sha": "6e549fa18",
+   "subject": "Defect A: tally ADJ surface transmission and close the Sankey control volume",
+   "ancestor_of_head": true,
+   "source": "                    # (conduction + radiation to ambient) - (absorbed short-wave). That",
+   "n": 16,
+   "name": "Closure \u2014 transmission at the outer face, net of short-wave",
+   "file": "pybuildingenergy/src/pybuildingenergy/source/utils.py",
+   "line": 9725,
+   "anchor": "the sol-air netting note and the control volume it describes"
+  }
+ ],
+ "static": {
+  "C1": {
+   "F_dir_0deg": 1.0,
+   "F_dir_60deg": 0.8134547880129361,
+   "F_dir_80deg": 0.2832435316431052,
+   "F_diffuse_hemispherical": 0.85534,
+   "F_W_constant_upstream": 0.9,
+   "falls_with_incidence": true,
+   "beam_branch_uses_angular": true,
+   "diffuse_branch_is_angle_free": true,
+   "angular_below_constant_at_60deg": true
+  },
+  "C2b": {
+   "identity_open_country_10m": 1.0,
+   "identity_abs_error": 0.0,
+   "case_terrain": "suburban",
+   "case_z_m": 6.75,
+   "case_factor": 0.6574055674303007,
+   "exponent_a": 0.22,
+   "delta_m": 370.0,
+   "station_terrain": "open_country",
+   "height_floor_binds": false
+  },
+  "A3": {
+   "A_env_outdoor_exposed_m2": 13.5,
+   "sum_of_all_surface_areas_m2": 88.60000000000001,
+   "party_surface_area_m2": 75.1
+  },
+  "q50": {
+   "declared_band": "1991-2005",
+   "band_resolves_to": 14.0,
+   "band_2006_today": 11.0,
+   "table_default_no_band": 6.9,
+   "H_ve_inf_with_table_q50_W_K": 3.1185,
+   "H_ve_inf_with_measured_q50_3p3_W_K": 0.7350749999999999,
+   "override_is_honoured": true,
+   "expected_ratio_3p3_over_14": 0.2357142857142857,
+   "observed_ratio": 0.23571428571428568,
+   "A_env_m2": 13.5,
+   "volume_m3": 54.0,
+   "n50_1_per_h": 3.5,
+   "n_inf_mean_1_per_h": 0.175
+  },
+  "latent_inputs": {
+   "w_20C_40pct": 0.005782766906364926,
+   "w_26C_40pct": 0.008348983317473215,
+   "band_is_RH_derived_at_zone_T": true,
+   "occupant_latent_W_at_full_occupancy": 29.456222222222227,
+   "occupant_latent_W_at_zero_occupancy": 0.0
+  },
+  "gains": {
+   "occupants_W": 84.0,
+   "appliances_W": 60.0,
+   "lighting_W": 0.0,
+   "base_W": 0.0,
+   "occupants_W_with_5_neighbours": 84.0,
+   "neighbour_multiplier_absent": true,
+   "declared_full_load_W_m2": {
+    "occupants": 8.0,
+    "appliances": 5.0,
+    "lighting": 3.0
+   }
+  },
+  "ground": {
+   "ground_contact_area_m2": 0.0,
+   "iso_types": {
+    "West exterior wall (opaque)": "OP",
+    "North wall to Apt 306": "ADJ",
+    "South wall to Apt 304": "ADJ",
+    "East wall to corridor": "ADJ",
+    "Floor to Apt 205": "ADJ",
+    "Ceiling to Apt 405": "ADJ",
+    "West window - fixed": "W",
+    "West window - operable": "W"
+   },
+   "n_GR": 0,
+   "n_ADJ": 5,
+   "n_OP": 1,
+   "n_W": 2
+  },
+  "coldest_month": {
+   "resolved": 7,
+   "latitude": -37.8,
+   "SOUTHERN": 7,
+   "NORTHERN": 1
+  },
+  "hce_dual_use": {
+   "static_h_ce_on_outdoor_surfaces": [
+    20.0
+   ],
+   "iso_table_constant": 20.0,
+   "dynamic_at_4ms": 20.0
+  },
+  "wind_scope": {
+   "H_ve_inf_by_terrain_class": {
+    "flat_open": 3.5572843354690518,
+    "open_country": 3.5572843354690518,
+    "suburban": 3.5572843354690518,
+    "city_centre": 3.5572843354690518
+   },
+   "infiltration_invariant_to_terrain": true,
+   "inf_reference_wind_m_s": 4.0,
+   "inf_reference_dT_K": 10.0,
+   "LBL_N_divisor": 20.0
+  },
+  "wind_call_sites": {
+   "h_ce_sites_multiplying_by_factor": [
+    6573,
+    7531,
+    8635,
+    10617
+   ],
+   "infiltration_sites_reading_raw_WS10m": [
+    {
+     "line": 9150,
+     "reads_raw_WS10m": true,
+     "applies_wind_factor": false
+    },
+    {
+     "line": 11175,
+     "reads_raw_WS10m": true,
+     "applies_wind_factor": false
+    }
+   ],
+   "factor_resolution_sites": [
+    5695,
+    7380,
+    8338,
+    10309
+   ],
+   "factor_applied_once_per_site": true
+  },
+  "dictionary_rewrites": [
+   {
+    "field": "/building/exposed_perimeter",
+    "declared": 0,
+    "after_sanitise": 1.0
+   },
+   {
+    "field": "/building_surface[6]/parapet",
+    "declared": 1.0,
+    "after_sanitise": 0.9
+   },
+   {
+    "field": "/building_surface[7]/parapet",
+    "declared": 1.0,
+    "after_sanitise": 0.9
+   }
+  ],
+  "dictionary": {
+   "fields": {
+    "net_floor_area (m2)": 20.0,
+    "ceiling height (m)": 2.7,
+    "zone volume (m3)": 54.0,
+    "U ext wall / partition / slab (W/m2K)": "1.0 / 2.5 / 1.8",
+    "U window (W/m2K) / g (-)": "5.4 / 0.65",
+    "window area (m2), orientation": "1.62, azimuth 270 (west), tilt 90",
+    "solar absorptance, exterior / interior": "0.75 / 0.0",
+    "surface thermal capacity (J/m2K)": "0 (all elements)",
+    "setpoints heat / setback (C)": "18.0 / 15.0",
+    "setpoints cool / setback (C)": "26.0 / 28.0",
+    "ventilation": "occupancy, 2.0 l/(s m\u00b2)",
+    "construction_year band": "1991-2005",
+    "terrain_class": "suburban",
+    "weather_station_terrain": "open_country",
+    "weather station sensor height (m)": 10.0,
+    "floor_level used for the height": 3,
+    "resolved surface height z (m)": 6.75,
+    "latitude / longitude": "-37.8 / 144.968",
+    "building_type_class": "Residential_apartment",
+    "number_adj_zone": 5,
+    "exposed_perimeter (declared)": 0,
+    "construction.thermal_bridges (declared)": 1.5,
+    "climate_parameters.coldest_month": 7
+   },
+   "adjacent_zones": [
+    {
+     "name": "apt_above",
+     "conditioned": true,
+     "setpoint": 20.0,
+     "volume": 54.0,
+     "a_use": 20.0
+    },
+    {
+     "name": "apt_below",
+     "conditioned": true,
+     "setpoint": 20.0,
+     "volume": 54.0,
+     "a_use": 20.0
+    },
+    {
+     "name": "apt_north",
+     "conditioned": true,
+     "setpoint": 20.0,
+     "volume": 54.0,
+     "a_use": 20.0
+    },
+    {
+     "name": "apt_south",
+     "conditioned": true,
+     "setpoint": 20.0,
+     "volume": 54.0,
+     "a_use": 20.0
+    },
+    {
+     "name": "corridor",
+     "conditioned": true,
+     "setpoint": 20.0,
+     "volume": 162.0,
+     "a_use": 60.0
+    }
+   ]
+  },
+  "headline_three_ways": {
+   "Q_H_sensible_kWh": {
+    "trajectory": 122.88,
+    "figure_gate": 122.88,
+    "head_run": 122.88
+   },
+   "Q_C_sensible_kWh": {
+    "trajectory": 19.9,
+    "figure_gate": 19.9,
+    "head_run": 19.9
+   },
+   "Q_C_latent_kWh": {
+    "trajectory": 1.51,
+    "figure_gate": 1.51,
+    "head_run": 1.51
+   },
+   "Q_need_total_kWh": {
+    "trajectory": 144.28,
+    "figure_gate": 144.28,
+    "head_run": 144.28
+   },
+   "Q_need_total_kWh_per_sqm": {
+    "trajectory": 7.21,
+    "figure_gate": 7.21,
+    "head_run": 7.21
+   }
+  },
+  "thermal_bridges": {
+   "declared_construction_thermal_bridges": 1.5,
+   "engine_consumers_of_that_field": [],
+   "exposed_perimeter_declared": 0,
+   "exposed_perimeter_after_sanitise": 1.0,
+   "psi_k_default_W_mK": 0.05,
+   "H_tb_W_K": 0.05
+  }
+ },
+ "engine": {
+  "E1_head_run": {
+   "Q_H_sensible_kWh": 122.87821931159378,
+   "Q_C_sensible_kWh": 19.8970438065106,
+   "Q_C_latent_kWh": 1.5090739271217328,
+   "Q_H_latent_kWh": 0.0,
+   "Q_C_latent_ungated_kWh": 597.8626485393066,
+   "Q_need_total_kWh": 144.28433704522612,
+   "Q_need_total_kWh_per_sqm": 7.214216852261306
+  },
+  "B9_latent_gate": {
+   "hours_cooling_on": 73,
+   "hours_heating_on": 580,
+   "latent_kWh_total": 1.5090739271217328,
+   "latent_kWh_with_cooling_off": 0.0,
+   "latent_kWh_while_heating": 0.0
+  },
+  "B4_B5_ventilation": {
+   "H_ve_designed_W_K_at_20_10_4": 48.44896,
+   "H_ve_infiltration_W_K_at_20_10_4": 3.1185,
+   "both_paths_nonzero": true,
+   "H_ve_reported_mean_W_K": 50.821199797163956,
+   "H_ve_reported_includes_infiltration": true,
+   "max_abs_Q_ve_minus_Hve_dT_W": 3.552713678800501e-13,
+   "mean_abs_Q_ve_minus_Hve_dT_W": 5.688678095736667e-14
+  },
+  "B15_B16_closure": {
+   "n_transmission_line_items": 7,
+   "line_items": [
+    "West_exterior_wall_opaque",
+    "North_wall_to_Apt_306",
+    "South_wall_to_Apt_304",
+    "East_wall_to_corridor",
+    "Floor_to_Apt_205",
+    "Ceiling_to_Apt_405",
+    "West_window_fixed_West_window_operable"
+   ],
+   "Q_tr_adjacent_loss_kWh": 1015.3049772189618,
+   "Q_tr_adjacent_gain_kWh": 1729.4467101697362,
+   "Q_tr_total_loss_kWh": 667.3294884103609,
+   "Q_tr_total_gain_kWh": 970.6327563088333,
+   "Q_sol_envelope_kWh": 9975.876768823042,
+   "Q_tb_loss_kWh": 1.9495590902002216
+  },
+  "B2_hce_at_constant_4ms": {
+   "dynamic_H_kWh": 124.08552378701542,
+   "fixed_H_kWh": 124.08552378701542,
+   "dynamic_C_kWh": 18.142786121876092,
+   "fixed_C_kWh": 18.142786121876092,
+   "max_abs_difference_kWh": 0.0
+  },
+  "B11_adjacent_zones": {
+   "H_neighbours_at_20C": 122.87821931159378,
+   "H_neighbours_at_24C": 0.0,
+   "H_neighbours_unconditioned_bztu": 4252.130764509336,
+   "setpoint_moves_demand": true,
+   "unconditioned_uses_a_different_path": true
+  }
+ },
+ "regression_suite": "228 passed, 0 skipped, 0 failed (161 s)"
+}
