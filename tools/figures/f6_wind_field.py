@@ -1,4 +1,8 @@
-"""F6 -- Wind field and the C2 attribution, Essendon Fields."""
+"""F6 -- Wind field and the C2 attribution, Essendon Fields.
+
+Panels 1-4 are the station record. Panels 5-6 are the correlation, which
+is driven by the wind local to the wall -- and on which C2 reverses sign.
+"""
 
 from __future__ import annotations
 
@@ -20,8 +24,17 @@ PIVOT_COLOR = "#D55E00"
 
 
 def build() -> dict:
-    stats = F.load_wind("essendon")
+    # Panels 1-4 characterise the WEATHER RECORD, which is a station record: the
+    # station run's wind statistics are the raw EPW column (its profile factor is
+    # 1.0 exactly), so the EPW cross-check still applies to them.
+    #
+    # Panels 5-6 are about the CORRELATION, which is driven by the wind local to
+    # the wall. They therefore read the terrain-corrected run. Mixing the two
+    # would describe a wind the model never saw.
+    stats = F.load_wind("station")
     s = stats["summary"]
+    stats_t = F.load_wind("terrain")
+    t = stats_t["summary"]
     epw = F.load_epw_wind()
     F.verify_epw_against_stats(epw, stats)     # aborts if the two disagree
 
@@ -183,7 +196,7 @@ def build() -> dict:
             va="center", ha="left", fontweight="bold")
 
     # ---- 5. extra sensible cooling by wind band -----------------------------
-    bands = s["bands"]
+    bands = t["bands"]
     labels = [b["label"].replace("–", "–") for b in bands]
     extra = [b["extra_cooling_kWh"] for b in bands]
     hoursb = [b["hours"] for b in bands]
@@ -204,15 +217,15 @@ def build() -> dict:
                     textcoords="offset points", ha="center",
                     va="bottom" if e >= 0 else "top", fontsize=7.8, color=F.INK,
                     linespacing=1.35)
-    if abs(s["pct_extra_from_nonzero_wind"] - 100.0) > 0.05:
+    if abs(t["pct_extra_from_nonzero_wind"] - 100.0) > 0.05:
         raise F.MissingQuantity(
-            f"F6: {s['pct_extra_from_nonzero_wind']:.2f} % of the C2 effect comes from "
+            f"F6: {t['pct_extra_from_nonzero_wind']:.2f} % of the C2 effect comes from "
             "non-zero wind, the paper states 100 %")
     p5.annotate(
-        f"$\\bf{{100.0\\ \\%}}$ of the {s['total_extra_cooling_kWh']:+.2f} kWh arises in "
+        f"$\\bf{{100.0\\ \\%}}$ of the {t['total_extra_cooling_kWh']:+.2f} kWh arises in "
         "genuine, non-zero wind.\n"
-        f"The exactly-zero bucket contributes {s['extra_cooling_zero_wind_kWh']:+.2f} kWh "
-        f"over {bands[0]['hours']} hours.\n"
+        f"The exactly-zero bucket contributes {t['extra_cooling_zero_wind_kWh']:+.2f} kWh "
+        f"over {bands[0]['hours']} hours. Bands are on the LOCAL wind.\n"
         "Shares are of the signed total, so a band opposing the total reads negative.",
         xy=(0.5, 0.955), xycoords="axes fraction", ha="center", va="top",
         fontsize=8.0, color=F.INK, linespacing=1.5, zorder=6,
@@ -221,41 +234,69 @@ def build() -> dict:
     )
 
     # ---- 6. the controlled experiment ---------------------------------------
-    c_fix, c_dyn = s["C_fix"], s["C_dyn"]
-    h_fix, h_dyn = s["H_fix"], s["H_dyn"]
-    delta_c = s["delta_C"]
-    for want, got, name in ((9.61, c_fix, "ISO fixed cooling"),
-                            (6.34, c_dyn, "dynamic cooling"),
-                            (-3.27, delta_c, "C2 cooling effect")):
+    c_fix, c_dyn = t["C_fix"], t["C_dyn"]
+    h_fix, h_dyn = t["H_fix"], t["H_dyn"]
+    delta_c = t["delta_C"]
+    # The station arm, for the contrast that is the whole point of the panel.
+    c_dyn_station, delta_c_station = s["C_dyn"], s["delta_C"]
+    for want, got, name in ((18.14, c_fix, "ISO fixed cooling"),
+                            (19.90, c_dyn, "dynamic cooling, local wind"),
+                            (1.75, delta_c, "C2 cooling effect, local wind"),
+                            (13.41, c_dyn_station, "dynamic cooling, station wind"),
+                            (-4.73, delta_c_station, "C2 cooling effect, station wind")):
         if abs(got - want) > 0.006:
             raise F.MissingQuantity(
                 f"F6: {name} is {got:.4f} kWh, the paper states {want}")
-    p6.bar([0, 1], [c_fix, c_dyn], 0.5, color=[F.MUTED_FILL, WIND_COLOR],
+    # The control arm must be identical in both runs: with h_ce on 'table' the
+    # wind is never consumed, so any difference means something other than the
+    # wind moved between them and the experiment is not controlled.
+    if abs(s["C_fix"] - t["C_fix"]) > 1e-9:
+        raise F.MissingQuantity(
+            f"F6: the ISO-fixed control arm differs between the two wind runs "
+            f"({s['C_fix']:.6f} vs {t['C_fix']:.6f} kWh) — the experiment is not "
+            f"controlled and the sign finding cannot be read off it")
+    # Three bars, because the finding is a comparison and not a level: the ISO
+    # constant, the correlation on the station wind, and the correlation on the
+    # wind the wall actually sees. The first is the control and is identical in
+    # both runs.
+    xs = [0, 1, 2]
+    vals = [c_fix, c_dyn_station, c_dyn]
+    p6.bar(xs, vals, 0.52,
+           color=[F.MUTED_FILL, "#8A8A8A", WIND_COLOR],
            edgecolor="white", linewidth=0.6, zorder=3)
-    p6.set_xticks([0, 1])
+    p6.set_xticks(xs)
     p6.set_xticklabels(["ISO fixed\n$h_{ce}$ = 20 W/(m²·K)",
-                        "Dynamic\n$h_{ce} = 4v + 4$"])
+                        "$h_{ce}=4u+4$\nstation wind (10 m)",
+                        "$h_{ce}=4u+4$\nlocal wind (terrain + height)"],
+                       fontsize=8.2)
     p6.set_ylabel("Annual sensible cooling (kWh)")
-    p6.set_ylim(0, c_fix * 2.25)
-    p6.set_title("6 — The controlled experiment: one switch, nothing else changed",
+    # Headroom for two stacked brackets AND the annotation box above them. At
+    # 1.62 the upper bracket label ran into the box.
+    p6.set_ylim(0, max(vals) * 2.05)
+    p6.set_title("6 — The controlled experiment: one switch, and which wind it is fed",
                  loc="left", pad=7)
-    for xi, v in zip([0, 1], [c_fix, c_dyn]):
+    for xi, v in zip(xs, vals):
         p6.annotate(f"{v:.2f} kWh", (xi, v), xytext=(0, -5), textcoords="offset points",
                     ha="center", va="top", fontsize=9.5, fontweight="bold",
                     color=F.INK if xi == 0 else "white")
-    br = c_fix * 1.18
-    p6.plot([0, 0, 1, 1], [c_fix * 1.08, br, br, c_dyn * 1.08], color=F.INK, lw=1.0)
-    p6.annotate(f"{delta_c:+.2f} kWh", (0.5, br), xytext=(0, 3),
-                textcoords="offset points", ha="center", va="bottom",
-                fontsize=11, fontweight="bold", color=F.DECREASE)
+    # One bracket per arm, against the shared control.
+    for xi, dc in ((1, delta_c_station), (2, delta_c)):
+        br = max(vals) * (1.12 if xi == 1 else 1.30)
+        p6.plot([0, 0, xi, xi],
+                [c_fix * 1.06, br, br, vals[xi] * 1.06], color=F.INK, lw=1.0)
+        p6.annotate(f"{dc:+.2f} kWh", (xi / 2.0, br), xytext=(0, 3),
+                    textcoords="offset points", ha="center", va="bottom",
+                    fontsize=11, fontweight="bold",
+                    color=F.DECREASE if dc < 0 else F.INCREASE)
     p6.annotate(
-        "The same engine, run twice, changing only the $h_{ce}$ model.\n"
-        f"Sensible heating moves {s['delta_H']:+.2f} kWh ({h_fix:.2f} → {h_dyn:.2f}); "
-        f"the cooling-plant hour count moves {s['n_cooling_dyn'] - s['n_cooling_fix']:+d} "
-        f"({s['n_cooling_fix']} → {s['n_cooling_dyn']} h).\n"
-        f"Verdict {stats['verdict']}: the year is windier than the pivot and the "
-        "cooling hours are windier still.",
-        xy=(0.5, 0.955), xycoords="axes fraction", ha="center", va="top",
+        "The same engine, run twice per wind, changing only the $h_{ce}$ model.\n"
+        f"$\\bf{{C2\\ reverses\\ sign}}$: {delta_c_station:+.2f} kWh on the station "
+        f"column, {delta_c:+.2f} kWh on the local wind.\n"
+        f"Heating moves {s['delta_H']:+.2f} → {t['delta_H']:+.2f} kWh; cooling-plant "
+        f"hours {s['n_cooling_fix']} → {s['n_cooling_dyn']} (station) and "
+        f"→ {t['n_cooling_dyn']} (local).\n"
+        "The control arm is identical in both runs, so nothing but the wind differs.",
+        xy=(0.5, 0.965), xycoords="axes fraction", ha="center", va="top",
         fontsize=8.0, color=F.INK, linespacing=1.5, zorder=6,
         bbox=dict(boxstyle="round,pad=0.45", facecolor="white",
                   edgecolor="#BBBBBB", linewidth=0.8),
@@ -266,9 +307,10 @@ def build() -> dict:
     fig.text(0.5, 0.972,
              "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011–2025 · 8,760 rows · "
              "0 missing wind values · screened by tools/diagnostics/weather_integrity.py\n"
-             "Panels 3–6 are read from results/diagnostics/wind_stats_essendon.json; panels 1–2 "
-             "are computed from the committed EPW wind column, whose annual aggregates are "
-             "asserted against that file before plotting.",
+             "Panels 1–4 characterise the station record (results/paper/wind_profile/"
+             "wind_stats_station.json + the committed EPW, cross-checked); panels 5–6 are the "
+             "correlation, which is driven by the wind LOCAL to the wall "
+             "(wind_stats_terrain.json).",
              ha="center", va="top", fontsize=8.3, color="#4D4D4D", linespacing=1.45)
 
     fig.tight_layout(rect=(0.005, 0.004, 0.995, 0.948))
@@ -279,10 +321,11 @@ def build() -> dict:
         "title": "Wind field and the C2 attribution",
         "files": files,
         "sources": [
-            "results/diagnostics/wind_stats_essendon.json",
-            "results/diagnostics/wind_verdict_essendon.md (the same numbers, for cross-check)",
+            "results/paper/wind_profile/wind_stats_station.json (panels 1–4)",
+            "results/paper/wind_profile/wind_stats_terrain.json (panels 5–6)",
+            "results/paper/wind_profile/wind_verdict_terrain.md (the same numbers, for cross-check)",
             "weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw "
-            "(panels 1–2 only, verified against wind_stats_essendon.json)",
+            "(panels 1–2 only, verified against wind_stats_station.json)",
         ],
         "numbers": [
             f"Annual: mean {mean_annual:.2f} m/s, median {s['median_wind_annual']:.1f}, "
@@ -300,15 +343,23 @@ def build() -> dict:
                         f"{b['share_pct']:.1f} %" for b in bands),
             f"100.0 % of the {s['total_extra_cooling_kWh']:+.2f} kWh arises in non-zero wind",
             f"Controlled experiment: cooling {c_fix:.2f} kWh at the fixed ISO coefficient "
-            f"against {c_dyn:.2f} kWh with h_ce = 4v + 4, a reduction of {abs(delta_c):.2f} kWh; "
-            f"heating {h_fix:.2f} → {h_dyn:.2f} kWh; verdict {stats['verdict']}",
+            f"against {c_dyn:.2f} kWh with h_ce = 4u + 4 on the local wind, "
+            f"an increase of {abs(delta_c):.2f} kWh; "
+            f"heating {h_fix:.2f} → {h_dyn:.2f} kWh; verdict {stats_t['verdict']}",
+            f"C2 REVERSES SIGN: {delta_c_station:+.2f} kWh on the raw 10 m station column "
+            f"against {delta_c:+.2f} kWh on the wind local to the wall "
+            f"(factor {t['wind_factor']:.4f}, {t['wind_audit']['terrain_class']} at "
+            f"z = {t['wind_audit']['surface_height_m']:.2f} m). The ISO-fixed control arm "
+            f"is identical in both runs at {c_fix:.2f} kWh",
         ],
         "note": (
             "Panels 1 and 2 need hourly detail that the committed summary JSON does not carry, "
             "so they are computed from the committed EPW named in the trajectory's provenance — "
             "the same file the diagnostic ran on, not a second run. figstyle."
             "verify_epw_against_stats asserts hour count, mean, max, exact-zero share and "
-            "above-pivot share against wind_stats_essendon.json and aborts on any mismatch."
+            "above-pivot share against wind_stats_station.json and aborts on any mismatch. "
+            "Panels 5–6 use the terrain-corrected run, because that is the wind the "
+            "correlation is actually fed; the two are kept apart deliberately."
         ),
         "placement": "main",
     }

@@ -153,7 +153,19 @@ TRAJECTORY = [
      "recalibration — Australian CSIRO permeability bands; case adopts pre-2006"),
     ("+Closure fixes", None,          # resolved at run time from --closure-ref
      "ADJ transmission into the inventory, latent gating, GR classification"),
+    ("+Wind profile", ["fab0ab0"],
+     "found defect (C2b) — h_ce driven by the wind local to the surface "
+     "(ASHRAE terrain/height profile), not by the raw 10 m station column"),
 ]
+
+# The wind-profile state must not be swept into the closure instrument: it is a
+# physics change, and back-porting it onto every earlier state would make the
+# trajectory measure it thirteen times and report it as moving nothing. Run with
+#     --closure-ref 86a3cd6
+# (the commit immediately before it) so `closure_commits` cannot see it. Asserted
+# rather than left to the operator, because a silently widened instrument does
+# not announce itself.
+WIND_PROFILE_COMMIT = "fab0ab0"
 
 # The metrics on which the trajectory's final state must reproduce HEAD, and the
 # tolerance: 0.01 is the printed precision, so anything that would change a
@@ -238,16 +250,23 @@ def build_stack(tmp: Path, closure: list[str]) -> tuple[Path, list[dict]]:
     _git("worktree", "add", "--detach", str(stack), BASELINE)
 
     states: list[dict] = []
+    closure_applied = False
     for label, commits, note in TRAJECTORY:
         shas = closure if commits is None else commits
         resolved: list[str] = []
         for sha in shas:
             resolved += cherry_pick(stack, sha, label)
         sha_now = _git("rev-parse", "HEAD", cwd=stack).stdout.strip()
+        if commits is None:
+            closure_applied = True
+        # Once the closure state has been built, every state after it already
+        # carries the instrument -- it is the same stack. Back-porting it again
+        # would cherry-pick commits that are already in the history and conflict,
+        # which is not a separability finding, just double application.
         states.append({
             "label": label, "note": note, "commits": list(shas),
             "sha": sha_now, "resolved_outside_engine": resolved,
-            "carries_closure": commits is None,
+            "carries_closure": closure_applied,
         })
         print(f"  built {label:<28} {sha_now[:9]}"
               + (f"   [resolved outside engine: {' '.join(resolved)}]" if resolved else ""),
@@ -433,15 +452,23 @@ def write_outputs(rows: list[dict], states: list[dict], engine_check: dict,
             f"96 % of that to hours reading exactly 0.0 m/s.")
         add("")
         add(f"The sign has flipped because the physics has, and for a defensible "
-            f"reason. With {w['pct_hours_above_pivot']:.1f} % of hours above the "
-            f"4 m/s pivot, `h_ce = 4v + 4` now sits *above* the ISO fixed "
-            f"20 W/(m²·K) for most of the year rather than collapsing to 4. A "
+            f"reason. With {w['pct_hours_above_pivot']:.1f} % of the STATION wind "
+            f"column above the 4 m/s pivot, `h_ce = 4v + 4` sits *above* the ISO "
+            f"fixed 20 W/(m²·K) for most of the year rather than collapsing to 4. A "
             f"stronger external film on a west wall of absorptance 0.75 sheds more "
             f"of the absorbed solar back to the air, the sol-air driving temperature "
-            f"falls, and less heat is conducted inward — so the correction now "
-            f"*reduces* cooling instead of manufacturing it. "
-            f"`results/diagnostics/wind_verdict_essendon.md` isolates this with a "
-            f"one-switch controlled experiment and returns verdict (a+b).")
+            f"falls, and less heat is conducted inward — so at this point in the "
+            f"order the correction *reduces* cooling instead of manufacturing it.")
+        add("")
+        add("**This row is C2 as published, driven by the raw 10 m station wind.** "
+            "The `+Wind profile` state at the end of the trajectory is what puts "
+            "that right: `h_ce` wants the wind local to the wall, and at Carlton's "
+            "terrain and height only 29.4 % of hours are above the pivot rather "
+            "than 59.8 %. Isolated one-switch experiments on both winds are in "
+            "`results/paper/wind_profile/` — `wind_verdict_station.md` and "
+            "`wind_verdict_terrain.md`. **C2 reverses sign between them.** The two "
+            "cannot simply be added: the trajectory is cumulative and C2's own row "
+            "is measured at its own position in the order.")
         add("")
 
     add("## 2. What each state adds")
@@ -732,6 +759,14 @@ def main() -> None:
             f"{missing}. The instrument would not be constant across states and "
             f"every residual below would be meaningless. Resolved: "
             f"{[c[:9] for c in closure]}")
+    if any(c.startswith(WIND_PROFILE_COMMIT) for c in closure):
+        raise SystemExit(
+            f"the wind-profile commit {WIND_PROFILE_COMMIT} is inside the closure "
+            f"set resolved from {args.closure_base}..{args.closure_ref}. It is a "
+            f"physics change, not an instrument change: back-porting it onto every "
+            f"state would apply it thirteen times over and then report its own row "
+            f"as moving nothing. Re-run with --closure-ref set to the commit before "
+            f"it.")
     print(f"closure commits: {[c[:9] for c in closure]}\n")
 
     tmp = Path(tempfile.mkdtemp(prefix="aib-canon-"))

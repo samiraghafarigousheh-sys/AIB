@@ -16,7 +16,11 @@ marking each as ALIGNED, FIXED (a mismatch this script corrects) or METHOD (an
 irreducible difference between the two approaches).
 
 The audit is not decoration. Six real mismatches were found and corrected while
-writing it; they are listed in ALIGNMENT below with the reason for each.
+writing it, and three more -- two in the ventilation input and one in the
+humidity control -- were found later while building the matched corrected case
+in ``corrected_vs_energyplus.py``. All are listed in ALIGNMENT below with the
+reason for each. ``results/paper/baseline_vs_ep_v2`` was produced before the
+last three were found; see the DEFECT_NOTICE.md in that directory.
 
 Usage
 -----
@@ -111,9 +115,15 @@ ALIGNMENT = [
      "FIXED"),
 
     ("Ventilation",
-     "2.0 l/(s m2) constant, H_ve = 48.4 W/K",
-     "DesignSpecification:OutdoorAir Flow/Area 0.002 m3/(s m2)",
-     "ALIGNED"),
+     "2.0 l/(s m2) constant, H_ve = 48.4 W/K applied in the zone balance every "
+     "hour of the year, including hours the plant is off",
+     "ZoneVentilation:DesignFlowRate 0.04 m3/s on an always-on schedule, "
+     "constant coefficients. Previously a DesignSpecification:OutdoorAir on the "
+     "ideal-loads system, which (a) wrote the rate into the per-Person field "
+     "that Flow/Area does not read, so no air flowed at all, and (b) would only "
+     "have delivered it in the hours the system ran. "
+     "results/paper/baseline_vs_ep_v2 was produced before either was found",
+     "FIXED"),
 
     ("Infiltration",
      "none (no infiltration configured)",
@@ -138,8 +148,10 @@ ALIGNMENT = [
 
     ("Latent load",
      "reported separately from Q_C_annual",
-     "ConstantSupplyHumidityRatio -> cooling is sensible only",
-     "ALIGNED"),
+     "humidification and dehumidification control both None -> the ideal loads "
+     "are sensible only. Previously both were ConstantSupplyHumidityRatio, "
+     "which humidifies the outdoor-air stream and books it as heating",
+     "FIXED"),
 
     ("Calendar / day of week",
      "profile generator uses AU holidays, Jan 1 lands on a Thursday",
@@ -468,13 +480,37 @@ def build_idf(bui: dict, adj_temp: float = 21.0, timestep: int = 6,
             f"    EquipmentLevel, {ig['lighting']['full_load']*AREA:.4f}, , , 0.0, {F_RAD}, 0.0;"
         )
     flow = bp["ventilation"]["flow_rate_per_person"] / 1000.0  # l/(s m2) -> m3/(s m2)
-    p.append(f"  DesignSpecification:OutdoorAir,\n    Apt305_OA, Flow/Area, {flow}, , , , Always1;")
+    vent_m3_s = round(flow * AREA, 8)
+    # Designed ventilation as a ZONE air exchange, not as outdoor air on the
+    # ideal-loads system.
+    #
+    # ISO 52016-1 applies H_ve = 48.4 W/K in the zone balance every hour of the
+    # year, so ventilation cools the zone while it free-floats. A
+    # DesignSpecification:OutdoorAir attached to ZoneHVAC:IdealLoadsAirSystem
+    # delivers outdoor air only in the hours the system actually runs -- 686 of
+    # 8760 here -- and none at all in the deadband, which let the zone drift
+    # warm in summer and roughly doubled the mechanical cooling.
+    # ZoneVentilation:DesignFlowRate on an always-on schedule with constant
+    # coefficients (A = 1, B = C = D = 0) reproduces the ISO term hour for hour.
+    p.append(
+        "  ZoneVentilation:DesignFlowRate,\n"
+        f"    Apt305_Ventilation, Apt305, Always1,\n"
+        f"    Flow/Zone, {vent_m3_s}, , , ,\n"
+        f"    Natural, 0.0, 1.0,\n"
+        f"    1.0, 0.0, 0.0, 0.0;")
     p.append(
         "  ZoneHVAC:IdealLoadsAirSystem,\n    Apt305_IdealLoads, ,\n"
         "    Apt305_SupplyNode, , ,\n"
         "    50, 13, 0.0156, 0.0077,\n    NoLimit, , , NoLimit, , ,\n    , ,\n"
-        "    ConstantSupplyHumidityRatio, ,\n    ConstantSupplyHumidityRatio,\n"
-        "    Apt305_OA, , , , , , ;\n\n"
+        # Both humidity controls are None so the ideal loads are sensible-only,
+        # which is the basis the ISO side is compared on (it reports latent
+        # separately). ConstantSupplyHumidityRatio humidifies the incoming
+        # outdoor air and books it as heating -- ~300 kWh/yr here.
+        "    None, ,\n    None,\n"
+        # No outdoor-air specification on the system: ventilation is a zone air
+        # exchange (ZoneVentilation:DesignFlowRate above), so the ideal loads
+        # only have to meet whatever load that leaves.
+        "    , , , , , , ;\n\n"
         "  ZoneHVAC:EquipmentList,\n    Apt305_EqpList,\n    SequentialLoad,\n"
         "    ZoneHVAC:IdealLoadsAirSystem, Apt305_IdealLoads, 1, 1, , ;\n\n"
         "  ZoneHVAC:EquipmentConnections,\n    Apt305, Apt305_EqpList,\n"

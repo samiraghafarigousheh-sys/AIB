@@ -42,6 +42,13 @@ EP_CSV = PAPER / "baseline_vs_ep_v2" / "baseline_vs_energyplus.csv"
 EP_META = PAPER / "baseline_vs_ep_v2" / "run_meta.json"
 WIND_ESSENDON = RESULTS / "diagnostics" / "wind_stats_essendon.json"
 WIND_RO = RESULTS / "diagnostics" / "wind_stats.json"
+# The wind-profile pair. Both are on the Essendon file and on the current engine
+# tree; they differ only in whether the h_ce correlation is fed the raw 10 m
+# station column or the wind local to the wall. WIND_STATION's wind statistics
+# ARE the station column (its factor is 1.0 exactly), which is what lets the EPW
+# cross-check still run against it.
+WIND_STATION = RESULTS / "paper" / "wind_profile" / "wind_stats_station.json"
+WIND_TERRAIN = RESULTS / "paper" / "wind_profile" / "wind_stats_terrain.json"
 EPW_ESSENDON = REPO / "weather_cache" / "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
 
 WEATHER = "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
@@ -65,6 +72,7 @@ STATES = [
     "+Infiltration envelope area",
     "+AU q50 recalibration",
     "+Closure fixes",
+    "+Wind profile",
 ]
 
 # Short labels for crowded axes. Rotated, never truncated.
@@ -82,6 +90,7 @@ SHORT = {
     "+Infiltration envelope area": "+Infil. envelope area",
     "+AU q50 recalibration": "+AU $q_{50}$",
     "+Closure fixes": "+Closure fixes",
+    "+Wind profile": "+Wind profile",
 }
 
 # Plain-text variants of SHORT, for FIGURES.md and any other prose output where
@@ -108,6 +117,7 @@ GROUPS = {
         "+AU q50 recalibration",
     ],
     "closure": ["+Closure fixes"],
+    "wind": ["+Wind profile"],
 }
 
 GROUP_LABEL = {
@@ -116,9 +126,10 @@ GROUP_LABEL = {
     "defect": "Implementation defects",
     "infiltration": "Infiltration defects + AU recalibration (§3.7.1)",
     "closure": "Closure fixes",
+    "wind": "Wind profile (terrain + height)",
 }
 
-CANONICAL_STATE = "+Closure fixes"
+CANONICAL_STATE = "+Wind profile"
 
 # ---------------------------------------------------------------------------
 # Colour. Okabe-Ito base hues, one per correction group, with a light-to-dark
@@ -134,6 +145,7 @@ GROUP_BASE = {
     "defect": "#D55E00",      # Okabe-Ito vermillion
     "infiltration": "#009E73",  # Okabe-Ito bluish green
     "closure": "#CC79A7",     # Okabe-Ito reddish purple
+    "wind": "#56B4E9",        # Okabe-Ito sky blue
 }
 
 # Reference / annotation colours, also CVD-safe against the group hues.
@@ -317,7 +329,7 @@ def group_legend_handles():
     from matplotlib.patches import Patch
     return [
         Patch(facecolor=GROUP_BASE[g], edgecolor="none", label=GROUP_LABEL[g])
-        for g in ("baseline", "literature", "defect", "infiltration", "closure")
+        for g in ("baseline", "literature", "defect", "infiltration", "closure", "wind")
     ]
 
 
@@ -341,14 +353,15 @@ EXPECTED_PER_AREA = {
     "+Infiltration envelope area": 6.44,
     "+AU q50 recalibration": 6.91,
     "+Closure fixes": 6.91,
+    "+Wind profile": 7.21,
 }
 
 CANONICAL = {
-    "Q_H_sensible_kWh": 123.74,
-    "Q_C_sensible_kWh": 13.41,
-    "Q_C_latent_kWh": 1.14,
-    "Q_need_kWh": 138.29,
-    "Q_need_kWh_per_sqm": 6.91,
+    "Q_H_sensible_kWh": 122.88,
+    "Q_C_sensible_kWh": 19.9,
+    "Q_C_latent_kWh": 1.51,
+    "Q_need_kWh": 144.28,
+    "Q_need_kWh_per_sqm": 7.21,
 }
 
 
@@ -488,7 +501,8 @@ def load_ep() -> dict:
 
 
 def load_wind(which: str) -> dict:
-    path = {"essendon": WIND_ESSENDON, "ro": WIND_RO}[which]
+    path = {"essendon": WIND_ESSENDON, "ro": WIND_RO,
+            "station": WIND_STATION, "terrain": WIND_TERRAIN}[which]
     return json.loads(_require(path).read_text())
 
 

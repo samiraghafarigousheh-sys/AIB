@@ -469,10 +469,30 @@ _LBL_N_DIVISOR = 20.0
 
 # Stack and wind coefficients for the driving-force modulation, and the reference
 # conditions at which the modulation factor equals 1.
+#
+# WHICH WIND THIS TERM TAKES (change 2b). The u here is the METEOROLOGICAL
+# wind, unadjusted -- deliberately, and unlike the h_ce correlation, which is
+# fed the terrain- and height-corrected local wind. Two reasons, both about
+# what these numbers were fitted to:
+#
+#   * shelter is already in the model once. The 50 Pa rate is brought down to
+#     a mean natural rate by the LBL divide-by-N relation with N = 20, the
+#     standard value for a SHELTERED low-rise building. N is where the site's
+#     obstruction enters. Reducing u as well would count the same shelter
+#     twice.
+#   * the normalisation is anchored to the same 4 m/s that ISO 13789 section
+#     9.5 freezes in, and that reference is a met-station speed. Feeding a
+#     local wind into the numerator while the denominator stays on the
+#     station reference would move f off 1 at the reference conditions and
+#     silently rescale the annual mean infiltration rate, which is not what a
+#     wind-profile correction is entitled to do.
+#
+# So: h_ce takes the local wind, infiltration takes the station wind. Stated
+# here rather than left to be inferred from which call site got the factor.
 _INF_C_STACK = 0.015      # per K
 _INF_C_WIND = 0.001       # per (m/s)^2
 _INF_DT_REF = 10.0        # K
-_INF_U_REF = 4.0          # m/s
+_INF_U_REF = 4.0          # m/s, METEOROLOGICAL -- see the note above
 
 # Volumetric heat capacity of air, W*h/(m3*K) -- rho*cp/3600.
 _RHO_CP_AIR_WH_M3K = 0.33
@@ -2179,6 +2199,346 @@ def _natural_convection_external_w_m2k(dT_abs: float, tilt_deg: float) -> float:
     if tilt < 10.0:
         return 1.52 * coeff
     return 0.76 * coeff
+
+
+# ==========================================================================
+#      LOCAL WIND SPEED FROM TERRAIN AND HEIGHT  (AIB change 2b)
+# ==========================================================================
+#
+# Change 2 replaces the ISO 13789 constant external convective coefficient
+# with h_ce = 4 + 4u. The correlation wants the wind *local to the building
+# surface*. An EPW carries the wind measured at the meteorological station --
+# 10 m above open terrain by convention. Feeding the station value straight
+# into the correlation asserts that the site and the station share both
+# terrain class and measurement height, which is a substantive claim and for
+# most real sites a false one.
+#
+# It is not a conservatism either. The pivot at which 4u + 4 equals the ISO
+# constant of 20 W/(m2 K) is u = 4 m/s. Whether the correction raises or
+# lowers the coefficient -- and therefore which way it moves the load --
+# depends on which side of that pivot the local wind sits, so an unadjusted
+# station wind can put the whole correction on the wrong side.
+#
+# ASHRAE Fundamentals gives the two-layer power-law profile that converts a
+# speed measured at one (height, terrain) to another:
+#
+#     u_local = u_met * (delta_met / z_met) ** a_met * (z / delta) ** a
+#
+# The first factor lifts the station reading to the top of the station's own
+# boundary layer, where the wind is by construction terrain-independent; the
+# second brings it back down to the building surface through the site's
+# boundary layer. The exponent a and the layer thickness delta are properties
+# of the terrain, not of the building.
+#
+# COEFFICIENTS. ASHRAE Handbook -- Fundamentals (2021), Chapter 24 "Airflow
+# Around Buildings", Table 1 (Atmospheric Boundary Layer Parameters). The four
+# classes and their (a, delta) pairs below are that table verbatim. They are
+# also exactly the values EnergyPlus derives from the Terrain field of its
+# Building object (Ocean / Country / Suburbs = Urban / City), which is the
+# check that the two engines can be driven by the same wind.
+_ASHRAE_TERRAIN_PARAMETERS = {
+    #  key            exponent a   layer thickness delta [m]
+    "flat_open":     (0.10, 210.0),   # flat, unobstructed; open water
+    "open_country":  (0.14, 270.0),   # flat open country -- AIRPORTS, i.e. most stations
+    "suburban":      (0.22, 370.0),   # urban, suburban, wooded
+    "city_centre":   (0.33, 460.0),   # large city centres
+}
+
+# Spellings that resolve to a canonical class. EnergyPlus's own Terrain keys
+# are included so that an IDF and a building dictionary can be stated in the
+# same words and checked against each other.
+_TERRAIN_CLASS_ALIASES = {
+    "ocean": "flat_open", "offshore": "flat_open", "sea": "flat_open",
+    "water": "flat_open", "flat": "flat_open", "flat_open_terrain": "flat_open",
+    "country": "open_country", "flatopencountry": "open_country",
+    "flat_open_country": "open_country", "open": "open_country",
+    "rural": "open_country", "airport": "open_country", "aerodrome": "open_country",
+    "suburb": "suburban", "suburbs": "suburban", "urban": "suburban",
+    "town": "suburban", "towns": "suburban", "wooded": "suburban",
+    "countrytownssuburbs": "suburban", "urban_industrial_forest": "suburban",
+    "city": "city_centre", "citycenter": "city_centre", "citycentre": "city_centre",
+    "city_center": "city_centre", "large_city": "city_centre",
+    "city_centres": "city_centre",
+}
+
+# An explicit request to keep the station wind unadjusted. Spelled out rather
+# than reachable by omission: a silent default is precisely how the unadjusted
+# wind came to be used in the first place.
+_TERRAIN_AS_MEASURED = "as_measured"
+_TERRAIN_AS_MEASURED_ALIASES = {
+    "as_measured", "as-measured", "asmeasured", "station", "met", "meteorological",
+    "unadjusted", "none", "off", "identity",
+}
+
+# Meteorological stations are sited in open terrain by convention, and the EPW
+# wind column is a 10 m reading. Both are overridable, because not every
+# record comes from an aerodrome.
+_WEATHER_STATION_TERRAIN_DEFAULT = "open_country"
+_WEATHER_STATION_SENSOR_HEIGHT_M = 10.0
+
+# Numerical guard only, NOT a physical claim about where the profile stops
+# being valid. The power law sends u -> 0 as z -> 0, which would drive h_ce
+# onto its own h_min floor and make the correction unbounded in effect. 1.0 m
+# sits below the mid-height of any habitable storey (a 2.4 m ceiling gives
+# 1.2 m), so it does not bind on any real case; it exists to keep a
+# mis-specified or zero height from silently producing a dead-calm surface.
+_SURFACE_HEIGHT_FLOOR_M = 1.0
+
+
+def _normalize_terrain_class(raw, *, field: str = "terrain_class",
+                             allow_as_measured: bool = True) -> str:
+    """Canonicalise a terrain-class name, or raise naming the four choices."""
+    key = str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+    if key in _TERRAIN_AS_MEASURED_ALIASES:
+        if not allow_as_measured:
+            raise ValueError(
+                f"{field} must be a terrain class, not '{raw}'. Choose one of: "
+                + ", ".join(sorted(_ASHRAE_TERRAIN_PARAMETERS)) + "."
+            )
+        return _TERRAIN_AS_MEASURED
+    key = _TERRAIN_CLASS_ALIASES.get(key, key)
+    if key not in _ASHRAE_TERRAIN_PARAMETERS:
+        raise ValueError(
+            f"{field} = {raw!r} is not a recognised terrain class. Choose one of: "
+            "'flat_open' (a=0.10, delta=210 m; unobstructed, open water), "
+            "'open_country' (a=0.14, delta=270 m; flat open country, airports), "
+            "'suburban' (a=0.22, delta=370 m; urban, suburban, wooded), "
+            "'city_centre' (a=0.33, delta=460 m; large city centres)."
+            + (f" Or '{_TERRAIN_AS_MEASURED}' to use the station wind unadjusted."
+               if allow_as_measured else "")
+        )
+    return key
+
+
+def local_wind_speed_factor(
+    terrain_class,
+    surface_height_m: float,
+    weather_station_terrain=_WEATHER_STATION_TERRAIN_DEFAULT,
+    weather_station_sensor_height_m: float = _WEATHER_STATION_SENSOR_HEIGHT_M,
+    height_floor_m: float = _SURFACE_HEIGHT_FLOOR_M,
+) -> float:
+    """
+    Multiplicative factor taking a measured station wind to the wind local to a
+    building surface, by the ASHRAE two-layer boundary-layer profile.
+
+    The factor is independent of the wind speed itself, so it can be resolved
+    once per run and applied to the whole hourly column.
+
+    The identity case is exact: a site declaring the station's own terrain at
+    the station's own sensor height returns 1.0 to floating-point tolerance.
+    """
+    site = _normalize_terrain_class(terrain_class, allow_as_measured=True)
+    if site == _TERRAIN_AS_MEASURED:
+        return 1.0
+    met = _normalize_terrain_class(
+        weather_station_terrain, field="weather_station_terrain",
+        allow_as_measured=False,
+    )
+
+    a_site, delta_site = _ASHRAE_TERRAIN_PARAMETERS[site]
+    a_met, delta_met = _ASHRAE_TERRAIN_PARAMETERS[met]
+
+    z_met = float(weather_station_sensor_height_m)
+    if not np.isfinite(z_met) or z_met <= 0.0:
+        z_met = _WEATHER_STATION_SENSOR_HEIGHT_M
+    z = float(surface_height_m)
+    if not np.isfinite(z):
+        z = float(height_floor_m)
+    z = max(float(height_floor_m), z)
+
+    factor = ((delta_met / z_met) ** a_met) * ((z / delta_site) ** a_site)
+    if not np.isfinite(factor) or factor <= 0.0:
+        return 1.0
+    return float(factor)
+
+
+def _get_site_options(building_object) -> dict:
+    """The ``site`` block, if the building dictionary carries one."""
+    if not isinstance(building_object, dict):
+        return {}
+    site = building_object.get("site", {}) or {}
+    return site if isinstance(site, dict) else {}
+
+
+def _lookup_site_option(building_object, keys, default=None):
+    """``site`` first, then simulation options / building parameters."""
+    site = _get_site_options(building_object)
+    for key in keys:
+        if site.get(key) is not None:
+            return site.get(key)
+    return _lookup_simulation_option(building_object, keys, default=default)
+
+
+def _resolve_wind_profile_enabled(building_object, override=None) -> bool:
+    """
+    Master switch for the terrain/height wind profile.
+
+    Defaults to True. Switching it off recovers the unadjusted station wind
+    exactly, for auditing what the profile is worth; it is the same escape as
+    declaring ``terrain_class = 'as_measured'`` and is equally explicit.
+    """
+    if override is not None:
+        return bool(override)
+    raw = _lookup_site_option(
+        building_object,
+        ("wind_profile", "wind_speed_profile", "terrain_wind_profile"),
+        default=True,
+    )
+    if isinstance(raw, str):
+        return raw.strip().lower() not in {"false", "0", "no", "off", "none"}
+    return bool(raw)
+
+
+def _resolve_surface_height_m(building_object, override=None) -> tuple:
+    """
+    Height above ground of the wind-exposed surfaces, in metres, with the basis
+    on which it was derived. Returns ``(z, basis)``.
+
+    Resolution order, most specific first:
+
+      1. an explicit ``site.surface_height_m``;
+      2. the mid-height of the zone from a declared floor number and storey
+         height, z = (n_floor - 0.5) * h_storey -- which for a single-storey
+         dwelling is the mid-height of its one zone, the correct reference for
+         a wall;
+      3. failing both, half the building height, i.e. case 2 with n_floor = 1.
+    """
+    if override is not None:
+        return max(0.0, float(override)), "explicit override passed to the run"
+
+    explicit = _lookup_site_option(
+        building_object, ("surface_height_m", "surface_height", "wind_reference_height_m")
+    )
+    if explicit is not None:
+        return max(0.0, float(explicit)), "site.surface_height_m, declared"
+
+    bld = (building_object.get("building", {}) or {}) if isinstance(building_object, dict) else {}
+
+    h_storey = _lookup_site_option(
+        building_object, ("storey_height_m", "storey_height", "floor_to_floor_height_m")
+    )
+    if h_storey is None:
+        h_storey = bld.get("height")
+    try:
+        h_storey = float(h_storey)
+    except Exception:
+        h_storey = 0.0
+    if not np.isfinite(h_storey) or h_storey <= 0.0:
+        h_storey = 2.7
+
+    n_floor = _lookup_site_option(
+        building_object, ("floor_level", "storey", "floor_number", "level")
+    )
+    if n_floor is None:
+        return 0.5 * h_storey, (
+            f"no floor level declared; mid-height of a single storey, "
+            f"0.5 x {h_storey:.2f} m"
+        )
+    try:
+        n = float(n_floor)
+    except Exception:
+        n = 1.0
+    n = max(1.0, n)
+    return (n - 0.5) * h_storey, (
+        f"mid-height of level {n:g}, (n - 0.5) x {h_storey:.2f} m"
+    )
+
+
+def _resolve_site_terrain_class(building_object, override=None) -> str:
+    """
+    The site's terrain class. **Required** -- there is no silent default.
+
+    A building definition that omits it raises, naming the four choices. The
+    defect this guards against is exactly the one that produced the unadjusted
+    station wind: a missing input that quietly resolved to "the same as the
+    weather station".
+    """
+    if override is not None:
+        return _normalize_terrain_class(override)
+    raw = _lookup_site_option(building_object, ("terrain_class", "terrain", "site_terrain"))
+    if raw is None:
+        raise ValueError(
+            "site.terrain_class is required when the wind-dependent external "
+            "convective coefficient (h_ce = 4 + 4u) is active, because the EPW "
+            "wind column is a 10 m open-terrain measurement and the correlation "
+            "needs the wind local to the building surface. Declare one of: "
+            "'flat_open' (unobstructed, open water), 'open_country' (flat open "
+            "country, airports), 'suburban' (urban, suburban, wooded), "
+            "'city_centre' (large city centres). To keep the station wind "
+            "unadjusted, say so explicitly with terrain_class='as_measured' or "
+            "wind_profile=False."
+        )
+    return _normalize_terrain_class(raw)
+
+
+def resolve_local_wind_factor(building_object, **overrides) -> tuple:
+    """
+    Resolve the station-to-surface wind factor for one building, and an audit
+    record of everything that went into it. Returns ``(factor, audit)``.
+
+    The audit record is what gets printed at run time, so the resolved height
+    and terrain can be checked rather than taken on trust.
+    """
+    enabled = _resolve_wind_profile_enabled(
+        building_object, overrides.get("wind_profile", None)
+    )
+    z, z_basis = _resolve_surface_height_m(
+        building_object, overrides.get("surface_height_m", None)
+    )
+    if not enabled:
+        return 1.0, {
+            "enabled": False, "terrain_class": _TERRAIN_AS_MEASURED,
+            "weather_station_terrain": _WEATHER_STATION_TERRAIN_DEFAULT,
+            "surface_height_m": z, "surface_height_basis": z_basis,
+            "exponent_a": None, "boundary_layer_delta_m": None,
+            "factor": 1.0,
+            "note": "wind_profile disabled explicitly; station wind used unadjusted",
+        }
+
+    site = _resolve_site_terrain_class(
+        building_object, overrides.get("terrain_class", None)
+    )
+    met_raw = overrides.get("weather_station_terrain", None)
+    if met_raw is None:
+        met_raw = _lookup_site_option(
+            building_object,
+            ("weather_station_terrain", "station_terrain", "met_terrain"),
+            default=_WEATHER_STATION_TERRAIN_DEFAULT,
+        )
+    met = _normalize_terrain_class(
+        met_raw, field="weather_station_terrain", allow_as_measured=False
+    )
+    z_met = overrides.get("weather_station_sensor_height_m", None)
+    if z_met is None:
+        z_met = _lookup_site_option(
+            building_object,
+            ("weather_station_sensor_height_m", "wind_sensor_height_m"),
+            default=_WEATHER_STATION_SENSOR_HEIGHT_M,
+        )
+    z_met = float(z_met)
+
+    factor = local_wind_speed_factor(
+        site, z, weather_station_terrain=met, weather_station_sensor_height_m=z_met,
+    )
+    a_site, delta_site = (
+        _ASHRAE_TERRAIN_PARAMETERS[site] if site != _TERRAIN_AS_MEASURED else (None, None)
+    )
+    a_met, delta_met = _ASHRAE_TERRAIN_PARAMETERS[met]
+    return factor, {
+        "enabled": True,
+        "terrain_class": site,
+        "weather_station_terrain": met,
+        "weather_station_sensor_height_m": z_met,
+        "surface_height_m": z,
+        "surface_height_basis": z_basis,
+        "surface_height_floor_m": _SURFACE_HEIGHT_FLOOR_M,
+        "height_floor_binds": z < _SURFACE_HEIGHT_FLOOR_M,
+        "exponent_a": a_site,
+        "boundary_layer_delta_m": delta_site,
+        "station_exponent_a": a_met,
+        "station_boundary_layer_delta_m": delta_met,
+        "factor": factor,
+    }
 
 
 def _normalize_external_convection_model(model_raw) -> str:
@@ -5328,6 +5688,13 @@ class ISO52016:
             building_object,
             external_convection_h_min,
         )
+        # Change 2b: station wind -> wind local to the surface, for h_ce only.
+        # This path defaults h_ce_model to 'table', so the terrain class is
+        # only demanded when a wind-driven model has actually been selected.
+        if h_ce_model != "table":
+            wind_factor_h_ce, wind_profile_audit = resolve_local_wind_factor(building_object)
+        else:
+            wind_factor_h_ce, wind_profile_audit = 1.0, {"enabled": False}
         h_re_model = _resolve_external_radiation_model(
             building_object,
             external_radiation_model,
@@ -6203,6 +6570,7 @@ class ISO52016:
                 u_wind = float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[tstep])
             if not np.isfinite(u_wind):
                 u_wind = 0.0
+            u_wind *= wind_factor_h_ce   # change 2b: station -> surface
             T_sky = _sky_temperature_from_weather(sim_df, tstep, sky_t_model)
             for zi in range(Z):
                 C_air = float(C_air_zone[zi])
@@ -7005,6 +7373,13 @@ class ISO52016:
             building_object,
             external_convection_h_min,
         )
+        # Change 2b: station wind -> wind local to the surface, for h_ce only.
+        # This path defaults h_ce_model to 'table', so the terrain class is
+        # only demanded when a wind-driven model has actually been selected.
+        if h_ce_model != "table":
+            wind_factor_h_ce, wind_profile_audit = resolve_local_wind_factor(building_object)
+        else:
+            wind_factor_h_ce, wind_profile_audit = 1.0, {"enabled": False}
         h_re_model = _resolve_external_radiation_model(
             building_object,
             external_radiation_model,
@@ -7153,6 +7528,7 @@ class ISO52016:
                 u_wind = float(pd.to_numeric(sim_df["WS10m"], errors="coerce").iloc[tstep])
             if not np.isfinite(u_wind):
                 u_wind = 0.0
+            u_wind *= wind_factor_h_ce   # change 2b: station -> surface
             T_sky = _sky_temperature_from_weather(sim_df, tstep, sky_t_model)
 
             # Clamp air nodes to provided zone temperatures
@@ -7945,6 +8321,45 @@ class ISO52016:
             if dyn_surf
             else "table"
         )
+        # --- AIB change 2b: station wind -> wind local to the surface --------
+        # h_ce = 4 + 4u wants the wind at the building surface; the EPW column
+        # is a 10 m open-terrain station reading. The conversion factor does
+        # not depend on the wind speed, so it is resolved once per run and
+        # applied to the whole hourly column.
+        #
+        # It is applied to h_ce ONLY. The infiltration stack/wind modulation
+        # keeps the station value -- see the note at _INF_C_WIND.
+        #
+        # The terrain class is only *required* when a wind-driven h_ce model is
+        # actually selected. With both models on 'table' the wind is never
+        # consumed, so demanding a terrain class would be demanding an input
+        # that cannot affect the answer.
+        if win_h_ce_model != "table" or opaque_h_ce_model != "table":
+            wind_factor_h_ce, wind_profile_audit = resolve_local_wind_factor(
+                building_object,
+                wind_profile=kwargs.get("wind_profile", None),
+                terrain_class=kwargs.get("terrain_class", None),
+                weather_station_terrain=kwargs.get("weather_station_terrain", None),
+                surface_height_m=kwargs.get("surface_height_m", None),
+            )
+            if wind_profile_audit.get("enabled"):
+                print(
+                    f"  wind profile: terrain '{wind_profile_audit['terrain_class']}' "
+                    f"(a={wind_profile_audit['exponent_a']}, "
+                    f"delta={wind_profile_audit['boundary_layer_delta_m']:.0f} m), "
+                    f"z = {wind_profile_audit['surface_height_m']:.2f} m "
+                    f"[{wind_profile_audit['surface_height_basis']}], station "
+                    f"'{wind_profile_audit['weather_station_terrain']}' at "
+                    f"{wind_profile_audit['weather_station_sensor_height_m']:.1f} m "
+                    f"-> u_local = {wind_factor_h_ce:.4f} x u_met",
+                    flush=True,
+                )
+        else:
+            wind_factor_h_ce = 1.0
+            wind_profile_audit = {
+                "enabled": False,
+                "note": "h_ce is the ISO constant on every surface; wind is not consumed",
+            }
         # --------------------------------------------------------------------
         i = 1
         with tqdm(total=12) as pbar:
@@ -8214,7 +8629,10 @@ class ISO52016:
                 if win_h_ce_model == "table" and opaque_h_ce_model == "table":
                     return h_ce_t
 
-                u_wind = float(WS10m_arr[tstep])
+                # Station wind lifted to the surface's own terrain and height
+                # (change 2b). The factor is 1.0 exactly when the site matches
+                # the station, or when the profile is switched off.
+                u_wind = float(WS10m_arr[tstep]) * wind_factor_h_ce
                 T_out_t = float(T2m_arr[tstep])
                 for Eli in range(bui_eln):
                     # Ground-contact and adiabatic elements are never wind
@@ -9874,6 +10292,45 @@ class ISO52016:
             if dyn_surf
             else "table"
         )
+        # --- AIB change 2b: station wind -> wind local to the surface --------
+        # h_ce = 4 + 4u wants the wind at the building surface; the EPW column
+        # is a 10 m open-terrain station reading. The conversion factor does
+        # not depend on the wind speed, so it is resolved once per run and
+        # applied to the whole hourly column.
+        #
+        # It is applied to h_ce ONLY. The infiltration stack/wind modulation
+        # keeps the station value -- see the note at _INF_C_WIND.
+        #
+        # The terrain class is only *required* when a wind-driven h_ce model is
+        # actually selected. With both models on 'table' the wind is never
+        # consumed, so demanding a terrain class would be demanding an input
+        # that cannot affect the answer.
+        if win_h_ce_model != "table" or opaque_h_ce_model != "table":
+            wind_factor_h_ce, wind_profile_audit = resolve_local_wind_factor(
+                building_object,
+                wind_profile=kwargs.get("wind_profile", None),
+                terrain_class=kwargs.get("terrain_class", None),
+                weather_station_terrain=kwargs.get("weather_station_terrain", None),
+                surface_height_m=kwargs.get("surface_height_m", None),
+            )
+            if wind_profile_audit.get("enabled"):
+                print(
+                    f"  wind profile: terrain '{wind_profile_audit['terrain_class']}' "
+                    f"(a={wind_profile_audit['exponent_a']}, "
+                    f"delta={wind_profile_audit['boundary_layer_delta_m']:.0f} m), "
+                    f"z = {wind_profile_audit['surface_height_m']:.2f} m "
+                    f"[{wind_profile_audit['surface_height_basis']}], station "
+                    f"'{wind_profile_audit['weather_station_terrain']}' at "
+                    f"{wind_profile_audit['weather_station_sensor_height_m']:.1f} m "
+                    f"-> u_local = {wind_factor_h_ce:.4f} x u_met",
+                    flush=True,
+                )
+        else:
+            wind_factor_h_ce = 1.0
+            wind_profile_audit = {
+                "enabled": False,
+                "note": "h_ce is the ISO constant on every surface; wind is not consumed",
+            }
         # --------------------------------------------------------------------
         
         i = 1
@@ -10154,7 +10611,10 @@ class ISO52016:
                 if win_h_ce_model == "table" and opaque_h_ce_model == "table":
                     return h_ce_t
 
-                u_wind = float(WS10m_arr[tstep])
+                # Station wind lifted to the surface's own terrain and height
+                # (change 2b). The factor is 1.0 exactly when the site matches
+                # the station, or when the profile is switched off.
+                u_wind = float(WS10m_arr[tstep]) * wind_factor_h_ce
                 T_out_t = float(T2m_arr[tstep])
                 for Eli in range(bui_eln):
                     # Ground-contact and adiabatic elements are never wind

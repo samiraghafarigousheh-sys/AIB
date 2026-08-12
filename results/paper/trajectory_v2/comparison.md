@@ -27,6 +27,7 @@ Ventilation and latent are reported **split**, not combined: they are already tw
 | +Infiltration envelope area | 114.87 | 12.89 | 1.05 | 589.33 | 0.0000 | 128.80 | 128.80 | 6.44 | +0.00 | +0.00 % | PASS | 7 |
 | +AU q50 recalibration | 123.74 | 13.41 | 1.14 | 600.11 | 0.0000 | 138.29 | 138.29 | 6.91 | +0.00 | +0.00 % | PASS | 7 |
 | +Closure fixes | 123.74 | 13.41 | 1.14 | 600.11 | 0.0000 | 138.29 | 138.29 | 6.91 | +0.00 | +0.00 % | PASS | 7 |
+| +Wind profile | 122.88 | 19.90 | 1.51 | 597.86 | 0.0000 | 144.28 | 144.28 | 7.21 | +0.00 | +0.00 % | PASS | 7 |
 
 `Latent cooling, ungated` is the diagnostic contrast column only — the zone moisture balance before the plant-on gate. It is never part of a total.
 
@@ -34,7 +35,9 @@ Ventilation and latent are reported **split**, not combined: they are already tw
 
 `+C2 wind-dependent h_ce` moves sensible cooling by **-25.30 kWh** (606.07 → 580.77) and sensible heating by +4.15 kWh. On the superseded RO file the same step moved cooling **+119.58 kWh**, and the wind diagnostic traced 96 % of that to hours reading exactly 0.0 m/s.
 
-The sign has flipped because the physics has, and for a defensible reason. With 59.8 % of hours above the 4 m/s pivot, `h_ce = 4v + 4` now sits *above* the ISO fixed 20 W/(m²·K) for most of the year rather than collapsing to 4. A stronger external film on a west wall of absorptance 0.75 sheds more of the absorbed solar back to the air, the sol-air driving temperature falls, and less heat is conducted inward — so the correction now *reduces* cooling instead of manufacturing it. `results/diagnostics/wind_verdict_essendon.md` isolates this with a one-switch controlled experiment and returns verdict (a+b).
+The sign has flipped because the physics has, and for a defensible reason. With 59.8 % of the STATION wind column above the 4 m/s pivot, `h_ce = 4v + 4` sits *above* the ISO fixed 20 W/(m²·K) for most of the year rather than collapsing to 4. A stronger external film on a west wall of absorptance 0.75 sheds more of the absorbed solar back to the air, the sol-air driving temperature falls, and less heat is conducted inward — so at this point in the order the correction *reduces* cooling instead of manufacturing it.
+
+**This row is C2 as published, driven by the raw 10 m station wind.** The `+Wind profile` state at the end of the trajectory is what puts that right: `h_ce` wants the wind local to the wall, and at Carlton's terrain and height only 29.4 % of hours are above the pivot rather than 59.8 %. Isolated one-switch experiments on both winds are in `results/paper/wind_profile/` — `wind_verdict_station.md` and `wind_verdict_terrain.md`. **C2 reverses sign between them.** The two cannot simply be added: the trajectory is cumulative and C2's own row is measured at its own position in the order.
 
 ## 2. What each state adds
 
@@ -53,6 +56,7 @@ The sign has flipped because the physics has, and for a defensible reason. With 
 | +Infiltration envelope area | `bb678a9` | found defect (A3) — leakage envelope = outdoor-exposed surfaces only |
 | +AU q50 recalibration | `421c282` | recalibration — Australian CSIRO permeability bands; case adopts pre-2006 |
 | +Closure fixes | `6e549fa18`, `82a909d3f`, `9fd8c696c`, `09357302f` | ADJ transmission into the inventory, latent gating, GR classification |
+| +Wind profile | `fab0ab0` | found defect (C2b) — h_ce driven by the wind local to the surface (ASHRAE terrain/height profile), not by the raw 10 m station column |
 
 ## 3. Order-independence and HEAD invariance
 
@@ -64,12 +68,12 @@ The numeric half of the check is against **HEAD run on this same weather file**,
 
 | Metric | HEAD, run directly | Trajectory's final state | Δ | within ±0.01? |
 | --- | ---: | ---: | ---: | :-: |
-| `Q_H_sensible_kWh` | 123.74 | 123.74 | 0.00e+00 | yes |
-| `Q_C_sensible_kWh` | 13.41 | 13.41 | 0.00e+00 | yes |
-| `Q_C_latent_kWh` | 1.14 | 1.14 | 0.00e+00 | yes |
-| `Q_need_total_kWh_per_sqm` | 6.91 | 6.91 | 0.00e+00 | yes |
+| `Q_H_sensible_kWh` | 122.88 | 122.88 | 0.00e+00 | yes |
+| `Q_C_sensible_kWh` | 19.90 | 19.90 | 0.00e+00 | yes |
+| `Q_C_latent_kWh` | 1.51 | 1.51 | 0.00e+00 | yes |
+| `Q_need_total_kWh_per_sqm` | 7.21 | 7.21 | 0.00e+00 | yes |
 
-**The new canonical headline: 123.74 kWh sensible heating + 13.41 kWh sensible cooling + 1.14 kWh gated latent = 138.29 kWh = 6.91 kWh/m²·yr.** Latent heating is 0.0000 kWh at this state, so "sensible + gated latent" and the engine's own total agree to the printed digit.
+**The new canonical headline: 122.88 kWh sensible heating + 19.90 kWh sensible cooling + 1.51 kWh gated latent = 144.28 kWh = 7.21 kWh/m²·yr.** Latent heating is 0.0000 kWh at this state, so "sensible + gated latent" and the engine's own total agree to the printed digit.
 
 ### What changed against the superseded run
 
@@ -77,13 +81,13 @@ Same engine, same building, same commit — only the weather file differs. Prior
 
 | Metric | Prior (RO, corrupt wind) | This run (Essendon) | Δ | Δ % |
 | --- | ---: | ---: | ---: | ---: |
-| Sensible heating (kWh) | 122.69 | 123.74 | +1.05 | +0.9 % |
-| Sensible cooling (kWh) | 67.12 | 13.41 | -53.71 | -80.0 % |
-| Gated latent cooling (kWh) | 3.98 | 1.14 | -2.84 | -71.3 % |
-| Total (kWh) | 193.79 | 138.29 | -55.50 | -28.6 % |
-| Total (kWh/m²·yr) | 9.69 | 6.91 | -2.77 | -28.6 % |
+| Sensible heating (kWh) | 122.69 | 122.88 | +0.19 | +0.2 % |
+| Sensible cooling (kWh) | 67.12 | 19.90 | -47.22 | -70.4 % |
+| Gated latent cooling (kWh) | 3.98 | 1.51 | -2.47 | -62.0 % |
+| Total (kWh) | 193.79 | 144.28 | -49.50 | -25.5 % |
+| Total (kWh/m²·yr) | 9.69 | 7.21 | -2.48 | -25.5 % |
 
-Sensible cooling moves -53.71 kWh, which is the expected direction and the expected channel: Essendon is genuinely windier (4.84 m/s mean, 59.8 % of hours above the 4 m/s pivot) than the RO file's zero-filled column implied, so `h_ce = 4v + 4` now sits *above* the ISO constant for most of the year instead of collapsing to a fifth of it. See `results/diagnostics/wind_verdict_essendon.md` for the controlled experiment that isolates C2 on this file.
+Sensible cooling moves -47.22 kWh, which is the expected direction and the expected channel: Essendon is genuinely windier (4.84 m/s mean, 59.8 % of hours above the 4 m/s pivot) than the RO file's zero-filled column implied, so `h_ce = 4v + 4` now sits *above* the ISO constant for most of the year instead of collapsing to a fifth of it. See `results/diagnostics/wind_verdict_essendon.md` for the controlled experiment that isolates C2 on this file.
 
 ## 4. The residual gate
 
@@ -108,6 +112,7 @@ The five party surfaces are 75.10 m², 88.6 % of the envelope UA, and were absen
 | +Infiltration envelope area | 7 | 955.25 | 1,717.72 | 1,771.53 | 1,771.53 | 0.0000 % | yes |
 | +AU q50 recalibration | 7 | 954.29 | 1,746.31 | 1,766.98 | 1,766.98 | 0.0000 % | yes |
 | +Closure fixes | 7 | 954.29 | 1,746.31 | 1,766.98 | 1,766.98 | 0.0000 % | yes |
+| +Wind profile | 7 | 1,015.30 | 1,729.45 | 1,808.40 | 1,808.40 | 0.0000 % | yes |
 
 ## 6. The latent gate
 
@@ -128,14 +133,15 @@ Latent cooling may be charged only in hours the cooling plant actually runs. Two
 | +Infiltration envelope area | 8,760 | 51 | 559 | 45 | 1.05 | 589.33 | 0.000000 | 0.000000 | 0.0000 |
 | +AU q50 recalibration | 8,760 | 54 | 575 | 47 | 1.14 | 600.11 | 0.000000 | 0.000000 | 0.0000 |
 | +Closure fixes | 8,760 | 54 | 575 | 47 | 1.14 | 600.11 | 0.000000 | 0.000000 | 0.0000 |
+| +Wind profile | 8,760 | 73 | 580 | 66 | 1.51 | 597.86 | 0.000000 | 0.000000 | 0.0000 |
 
 Southern-hemisphere phase, gated latent cooling by month at the canonical state (kWh):
 
 | Jan | Feb | Mar | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0.79 | 0.09 | 0.03 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.04 | 0.18 |
+| 0.92 | 0.14 | 0.10 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.03 | 0.07 | 0.24 |
 
-Dec–Feb 1.07 kWh against Jun–Aug 0.00 kWh: the load sits in the austral summer, which is the phase check.
+Dec–Feb 1.30 kWh against Jun–Aug 0.00 kWh: the load sits in the austral summer, which is the phase check.
 
 ## 7. Provenance
 
@@ -145,18 +151,19 @@ Dec–Feb 1.07 kWh against Jun–Aug 0.00 kWh: the load sits in the austral summ
 * weather screened by `tools/diagnostics/weather_integrity.py`: 8,760 rows, 0 missing wind values, mean 4.84 m/s, 1.58 % exactly zero, 59.8 % above 4 m/s, dead-calm months: none
 * superseded weather (kept in `weather_cache/` for the contrast): `AUS_VIC_Melbourne.RO.948680_TMYx.2011-2025.epw`
 * Baseline: `2e6e910c1`
-* +C1 dynamic window: `9d9fe477e`
-* +C2 wind-dependent h_ce: `df346332b`
-* +Ventilation: `ca5f00dff`
-* +Latent: `7d5af6f72`
-* +Internal gains: `ba375b5a4` — conflicts outside the engine resolved in favour of the state in `.gitignore`
-* +Conditioned zones: `6ab94ce29`
-* +Ground contact: `18eb20fbc`
-* +Hemisphere: `f891f423e`
-* +Infiltration supply temp: `70051c4b3`
-* +Infiltration envelope area: `982236e32`
-* +AU q50 recalibration: `e6267b998` — conflicts outside the engine resolved in favour of the state in `examples/apt305_building.py`
-* +Closure fixes: `a6bd80baf` — conflicts outside the engine resolved in favour of the state in `.gitignore, colab_closed_balance.ipynb`
+* +C1 dynamic window: `a0b8f7425`
+* +C2 wind-dependent h_ce: `ef7a3fda4`
+* +Ventilation: `41af7c456`
+* +Latent: `72cd86a65`
+* +Internal gains: `ef32225a2` — conflicts outside the engine resolved in favour of the state in `.gitignore`
+* +Conditioned zones: `287160cb1`
+* +Ground contact: `9df3291c7`
+* +Hemisphere: `2301ce99a`
+* +Infiltration supply temp: `f77251d60`
+* +Infiltration envelope area: `dd2477572`
+* +AU q50 recalibration: `96e4a56bf` — conflicts outside the engine resolved in favour of the state in `examples/apt305_building.py`
+* +Closure fixes: `547f9d9d6` — conflicts outside the engine resolved in favour of the state in `.gitignore, colab_closed_balance.ipynb`
+* +Wind profile: `f97224d32` — conflicts outside the engine resolved in favour of the state in `examples/corrected_vs_energyplus.py, tools/diagnostics/wind_h_ce_diagnostic.py`
 
 ## 8. The gate
 

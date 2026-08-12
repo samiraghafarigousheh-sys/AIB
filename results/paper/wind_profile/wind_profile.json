@@ -1,0 +1,210 @@
+{
+  "weather": "/home/user/AIB/weather_cache/AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+  "weather_name": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+  "epw": {
+    "mean_m_s": 4.840331050228311,
+    "pct_above_pivot": 59.84018264840183,
+    "mean_h_ce": 23.361324200913245,
+    "n": 8760
+  },
+  "idf_static": {
+    "idf": "results/paper_pre_wind_profile/validation_corrected/apt305_conditioned.idf",
+    "terrain_field": "Suburbs",
+    "terrain_class_equivalent": "suburban",
+    "site_heightvariation_present": false,
+    "site_weatherstation_present": false,
+    "basis": "Site:HeightVariation ABSENT; EnergyPlus falls back to the Building object's Terrain = 'Suburbs'",
+    "exponent_a": 0.22,
+    "boundary_layer_delta_m": 370.0,
+    "station_sensor_height_m": 10.0,
+    "station_exponent_a": 0.14,
+    "station_boundary_layer_delta_m": 270.0,
+    "wind_exposed_surface_heights_m": {
+      "WestWall": 1.35,
+      "WestWin_Fixed": 1.45,
+      "WestWin_Operable": 1.45
+    },
+    "factors": {
+      "WestWall": 0.4613812876480726,
+      "WestWin_Fixed": 0.4686919648958063,
+      "WestWin_Operable": 0.4686919648958063
+    }
+  },
+  "idf_static_now": {
+    "idf": "results/paper/validation_corrected/apt305_conditioned.idf",
+    "terrain_field": "Suburbs",
+    "terrain_class_equivalent": "suburban",
+    "site_heightvariation_present": false,
+    "site_weatherstation_present": false,
+    "basis": "Site:HeightVariation ABSENT; EnergyPlus falls back to the Building object's Terrain = 'Suburbs'",
+    "exponent_a": 0.22,
+    "boundary_layer_delta_m": 370.0,
+    "station_sensor_height_m": 10.0,
+    "station_exponent_a": 0.14,
+    "station_boundary_layer_delta_m": 270.0,
+    "wind_exposed_surface_heights_m": {
+      "WestWall": 6.75,
+      "WestWin_Fixed": 6.8500000000000005,
+      "WestWin_Operable": 6.8500000000000005
+    },
+    "factors": {
+      "WestWall": 0.6574055674303007,
+      "WestWin_Fixed": 0.6595359505393404,
+      "WestWin_Operable": 0.6595359505393404
+    }
+  },
+  "site": {
+    "enabled": true,
+    "terrain_class": "suburban",
+    "weather_station_terrain": "open_country",
+    "weather_station_sensor_height_m": 10.0,
+    "surface_height_m": 6.75,
+    "surface_height_basis": "mid-height of level 3, (n - 0.5) x 2.70 m",
+    "surface_height_floor_m": 1.0,
+    "height_floor_binds": false,
+    "exponent_a": 0.22,
+    "boundary_layer_delta_m": 370.0,
+    "station_exponent_a": 0.14,
+    "station_boundary_layer_delta_m": 270.0,
+    "factor": 0.6574055674303007,
+    "mean_local_m_s": 3.1820605806258455,
+    "pct_hours_above_pivot": 29.429223744292237
+  },
+  "identity": {
+    "factor": 1.0
+  },
+  "crossings": [
+    [
+      "flat_open",
+      2.0811818267857816
+    ],
+    [
+      "open_country",
+      9.999999999999996
+    ],
+    [
+      "suburban",
+      45.42907291741027
+    ],
+    [
+      "city_centre",
+      113.6351261480942
+    ]
+  ],
+  "suburban_58": 1.0552143929200386,
+  "z_for_070": 8.979125796776222,
+  "height_floor_m": 1.0,
+  "terrain_rows": [
+    {
+      "terrain_class": "flat_open",
+      "exponent_a": 0.1,
+      "boundary_layer_delta_m": 210.0,
+      "factor": 1.124862334299764,
+      "mean_local_m_s": 5.444706083943445,
+      "pct_hours_above_pivot": 68.37899543378995,
+      "mean_h_ce": 25.778824335773777
+    },
+    {
+      "terrain_class": "open_country",
+      "exponent_a": 0.14,
+      "boundary_layer_delta_m": 270.0,
+      "factor": 0.9464605753076566,
+      "mean_local_m_s": 4.581182510478601,
+      "pct_hours_above_pivot": 54.20091324200913,
+      "mean_h_ce": 22.324730041914403
+    },
+    {
+      "terrain_class": "suburban",
+      "exponent_a": 0.22,
+      "boundary_layer_delta_m": 370.0,
+      "factor": 0.6574055674303007,
+      "mean_local_m_s": 3.1820605806258455,
+      "pct_hours_above_pivot": 29.429223744292237,
+      "mean_h_ce": 16.728242322503384
+    },
+    {
+      "terrain_class": "city_centre",
+      "exponent_a": 0.33,
+      "boundary_layer_delta_m": 460.0,
+      "factor": 0.3938683535051524,
+      "mean_local_m_s": 1.9064532211732899,
+      "pct_hours_above_pivot": 2.7739726027397262,
+      "mean_h_ce": 11.62581288469316
+    }
+  ],
+  "au_cases": [
+    {
+      "case": "Suburban single-storey dwelling",
+      "terrain_class": "suburban",
+      "surface_height_m": 1.35,
+      "height_basis": "(level 1 - 0.5) x 2.7 m",
+      "factor": 0.4613812876480726,
+      "mean_local_m_s": 2.2332381725972854,
+      "pct_hours_above_pivot": 7.910958904109588,
+      "direction": "reduction"
+    },
+    {
+      "case": "Inner-urban apartment, Level 3 (Apt 305)",
+      "terrain_class": "suburban",
+      "surface_height_m": 6.75,
+      "height_basis": "(level 3 - 0.5) x 2.7 m",
+      "factor": 0.6574055674303007,
+      "mean_local_m_s": 3.1820605806258455,
+      "pct_hours_above_pivot": 29.429223744292237,
+      "direction": "reduction"
+    },
+    {
+      "case": "City-centre apartment, Level 20",
+      "terrain_class": "city_centre",
+      "surface_height_m": 58.5,
+      "height_basis": "(level 20 - 0.5) x 3.0 m",
+      "factor": 0.8032343605500932,
+      "mean_local_m_s": 3.887920215980898,
+      "pct_hours_above_pivot": 44.18949771689498,
+      "direction": "reduction"
+    },
+    {
+      "case": "Rural dwelling, open ground",
+      "terrain_class": "open_country",
+      "surface_height_m": 1.35,
+      "height_basis": "(level 1 - 0.5) x 2.7 m",
+      "factor": 0.7555213259454648,
+      "mean_local_m_s": 3.6569733330834975,
+      "pct_hours_above_pivot": 39.098173515981735,
+      "direction": "reduction"
+    },
+    {
+      "case": "Identity case: station terrain at station height",
+      "terrain_class": "open_country",
+      "surface_height_m": 10.0,
+      "height_basis": "explicit 10.0 m",
+      "factor": 1.0,
+      "mean_local_m_s": 4.840331050228311,
+      "pct_hours_above_pivot": 59.84018264840183,
+      "direction": "unchanged"
+    }
+  ],
+  "item0": {
+    "measured": {
+      "Environment": {
+        "mean_m_s": 4.840373858447489,
+        "n": 8760
+      },
+      "WESTWALL": {
+        "mean_m_s": 2.233257923508572,
+        "n": 8760
+      },
+      "WESTWIN_FIXED": {
+        "mean_m_s": 2.2686443345460483,
+        "n": 8760
+      },
+      "WESTWIN_OPERABLE": {
+        "mean_m_s": 2.2686443345460483,
+        "n": 8760
+      }
+    },
+    "ep_mean_m_s": 2.233257923508572,
+    "verdict": "**Yes \u2014 this is a fourth input mismatch, and it is the largest of the four in the wind term.** `Site:HeightVariation` is absent from both generated IDFs, so EnergyPlus fell back to the `Building` object's `Terrain` field, which the builder writes as `Suburbs` \u2014 a = 0.22, \u03b4 = 370 m. EnergyPlus therefore applied a terrain **and** height correction to every wind-exposed surface, evaluating the west wall at its centroid height of 1.35 m and driving its external film with a mean of 2.23 m/s. The ISO side used the raw 10 m station column, mean 4.84 m/s. The two engines were driven by winds differing by a factor of 2.17.",
+    "discussion": "Two separate errors are stacked here, and they must not be conflated.\n\n**The terrain error is the one the task is about**, and it was on the ISO side: EnergyPlus applied a profile, the ISO engine did not.\n\n**The height error is on the EnergyPlus side, and it is new.** The IDF places the zone origin at z = 0 and the west wall spans 0 \u2192 2.70 m, so EnergyPlus evaluated a *third-floor* apartment's wall at a centroid height of 1.35 m. That is not a wind-profile question \u2014 the geometry says the apartment is at ground level. It affects the wind term (through the profile) and nothing else, because every other surface in the model is either adiabatic, on an OtherSideCoefficients boundary, or the window in that same wall.\n\nAfter this change the ISO side runs at 3.18 m/s (suburban, z = 6.75 m) and EnergyPlus at 2.23 m/s (suburbs, z = 1.35 m). The remaining gap is entirely the height, and matching it requires moving the EnergyPlus zone up three storeys, not changing the profile. That is done in the matched validation case; see `results/paper/validation_corrected/`."
+  }
+}

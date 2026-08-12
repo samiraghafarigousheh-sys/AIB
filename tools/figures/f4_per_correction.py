@@ -109,7 +109,7 @@ def build() -> dict:
 
     dh, heat_final = _waterfall(
         ax1, heat,
-        title="A — Sensible heating: baseline 1,779.36 kWh → canonical 123.74 kWh",
+        title="A — Sensible heating: baseline 1,779.36 kWh → canonical 122.88 kWh",
         ylabel="Annual sensible heating (kWh)",
         fmt=lambda v: f"{v:,.2f}",
         annotate_key={
@@ -123,7 +123,7 @@ def build() -> dict:
     )
     dc, cool_final = _waterfall(
         ax2, cool,
-        title="B — Sensible cooling: baseline 640.84 kWh → canonical 13.41 kWh",
+        title="B — Sensible cooling: baseline 640.84 kWh → canonical 19.90 kWh",
         ylabel="Annual sensible cooling (kWh)",
         fmt=lambda v: f"{v:,.2f}",
         annotate_key={
@@ -149,10 +149,10 @@ def build() -> dict:
         if abs(got - want) > 0.6:
             raise F.MissingQuantity(
                 f"F4: heating step at {state} is {got:+.2f} kWh, the paper states {want:+.2f}")
-    if abs(heat_final - 123.74) > 0.01 or abs(cool_final - 13.41) > 0.01:
+    if abs(heat_final - 122.88) > 0.01 or abs(cool_final - 19.90) > 0.01:
         raise F.MissingQuantity(
             f"F4: cascade lands on {heat_final:.2f} / {cool_final:.2f} kWh, "
-            "not the canonical 123.74 / 13.41")
+            "not the canonical 122.88 / 19.90")
 
     handles = [
         Patch(facecolor=F.INCREASE, edgecolor="white", label="Correction raises the need"),
