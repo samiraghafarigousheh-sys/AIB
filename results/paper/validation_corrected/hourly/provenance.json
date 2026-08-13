@@ -1,0 +1,110 @@
+{
+  "generated_utc": "2026-08-13T07:27:06+00:00",
+  "energyplus": "EnergyPlus, Version 24.1.0-9d7789a3ac",
+  "weather": "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw",
+  "note": "Output variables only were added to each committed IDF; no input to any model was changed.",
+  "runs": {
+    "A": {
+      "idf": "results/paper/validation_corrected/apt305_conditioned.idf",
+      "output_csv": "results/paper/validation_corrected/hourly/hourly_corrected_matched.csv",
+      "n_hours": 8760,
+      "columns": [
+        "ideal_loads_outdoor_air_mass_flow_kg_s",
+        "zone_ventilation_mass_flow_kg_s",
+        "ideal_loads_supply_air_mass_flow_kg_s",
+        "heating_sensible_J",
+        "heating_total_J",
+        "heating_latent_J",
+        "cooling_sensible_J",
+        "cooling_latent_J",
+        "site_wind_m_s",
+        "westwall_surface_wind_m_s"
+      ],
+      "assertions": [
+        {
+          "quantity": "heating_sensible_J",
+          "unit": "kWh",
+          "expected": 148.973,
+          "measured": 148.973102
+        },
+        {
+          "quantity": "cooling_sensible_J",
+          "unit": "kWh",
+          "expected": 21.59,
+          "measured": 21.590255
+        },
+        {
+          "quantity": "site_wind_m_s",
+          "unit": "m/s",
+          "expected": 4.84,
+          "measured": 4.840374
+        },
+        {
+          "quantity": "westwall_surface_wind_m_s",
+          "unit": "m/s",
+          "expected": 3.182,
+          "measured": 3.182089
+        }
+      ]
+    },
+    "B": {
+      "idf": "results/paper_pre_wind_profile/validation_corrected/apt305_conditioned.idf",
+      "output_csv": "results/paper/validation_corrected/hourly/hourly_as_published_wind.csv",
+      "n_hours": 8760,
+      "columns": [
+        "site_wind_m_s",
+        "westwall_surface_wind_m_s",
+        "westwin_fixed_surface_wind_m_s"
+      ],
+      "assertions": [
+        {
+          "quantity": "site_wind_m_s",
+          "unit": "m/s",
+          "expected": 4.84,
+          "measured": 4.840374
+        },
+        {
+          "quantity": "westwall_surface_wind_m_s",
+          "unit": "m/s",
+          "expected": 2.233,
+          "measured": 2.233258
+        },
+        {
+          "quantity": "westwin_fixed_surface_wind_m_s",
+          "unit": "m/s",
+          "expected": 2.269,
+          "measured": 2.268644
+        }
+      ]
+    },
+    "C": {
+      "idf": "results/paper/validation_corrected/apt305_baseline_repaired.idf",
+      "output_csv": "results/paper/validation_corrected/hourly/hourly_baseline_repaired.csv",
+      "n_hours": 8760,
+      "columns": [
+        "heating_sensible_J",
+        "heating_total_J",
+        "heating_latent_J",
+        "cooling_sensible_J",
+        "cooling_latent_J",
+        "ideal_loads_outdoor_air_mass_flow_kg_s",
+        "zone_ventilation_mass_flow_kg_s",
+        "ideal_loads_supply_air_mass_flow_kg_s"
+      ],
+      "assertions": [
+        {
+          "quantity": "heating_sensible_J",
+          "unit": "kWh",
+          "expected": 2081.972,
+          "measured": 2081.971848
+        },
+        {
+          "quantity": "cooling_sensible_J",
+          "unit": "kWh",
+          "expected": 697.348,
+          "measured": 697.347821
+        }
+      ]
+    }
+  }
+}

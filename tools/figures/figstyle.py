@@ -51,6 +51,19 @@ WIND_STATION = RESULTS / "paper" / "wind_profile" / "wind_stats_station.json"
 WIND_TERRAIN = RESULTS / "paper" / "wind_profile" / "wind_stats_terrain.json"
 EPW_ESSENDON = REPO / "weather_cache" / "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
 
+# The repaired ISO-against-EnergyPlus comparison. This is what F1 is built from;
+# baseline_vs_ep_v2/ above predates the discovery of the reference-model defects
+# and its EnergyPlus column is superseded (see its own DEFECT_NOTICE.md).
+VALIDATION_CSV = PAPER / "validation_corrected" / "validation_corrected.csv"
+VALIDATION_MD = PAPER / "validation_corrected" / "validation_corrected.md"
+# The loss-path decomposition of Section 4.1.3, extracted from DISCREPANCY.md by
+# tools/paper/extract_loss_paths.py.
+LOSS_PATHS_CSV = PAPER / "validation_corrected" / "loss_paths.csv"
+DISCREPANCY_MD = PAPER / "validation_corrected" / "DISCREPANCY.md"
+# Hourly EnergyPlus series for the four reference-model defects, regenerated from
+# the committed IDFs by tools/diagnostics/ep_hourly_defect_signatures.py.
+EP_HOURLY_DIR = PAPER / "validation_corrected" / "hourly"
+
 WEATHER = "AUS_VIC_Melbourne-Essendon.Fields.958660_TMYx.2011-2025.epw"
 NET_FLOOR_AREA_M2 = 20.0
 
@@ -557,3 +570,273 @@ def verify_epw_against_stats(epw: dict, stats: dict) -> None:
             "committed EPW wind column does not reproduce the committed wind "
             "summary:\n" + "\n".join(bad)
         )
+
+
+# ---------------------------------------------------------------------------
+# The repaired ISO-against-EnergyPlus comparison (F1), and the loss-path
+# decomposition behind it (F12).
+# ---------------------------------------------------------------------------
+
+# Table 3 of the manuscript, kWh/yr. Each engine is compared against a reference
+# matched to IT: the baseline engine against the ISO 13789 buffer case with
+# inflated gains and no infiltration, the corrected engine against the 20 degC
+# neighbour case with EN 16798-1 gains and infiltration. Both references carry
+# the repairs to the four defects. Any figure printing these must reproduce them.
+EXPECTED_VALIDATION = {
+    "baseline": {
+        "Heating": (1779.36, 2081.97),
+        "Cooling": (640.84, 697.35),
+        "Total": (2420.20, 2779.32),
+    },
+    "corrected": {
+        "Heating": (122.88, 148.97),
+        "Cooling": (19.90, 21.59),
+        "Total": (142.78, 170.56),
+    },
+}
+
+VALIDATION_PANEL_LABEL = {
+    "baseline": "Baseline engine",
+    "corrected": "Corrected engine",
+}
+
+# What each engine's reference is matched on. Printed on the panel, because the
+# whole point of the two-panel form is that these are two different references.
+VALIDATION_PANEL_BASIS = {
+    "baseline": ("reference matched to it: unconditioned buffer neighbours,\n"
+                 "inflated internal gains, no infiltration"),
+    "corrected": ("reference matched to it: neighbours at 20 °C, EN 16798-1 gains,\n"
+                  "infiltration at the adopted permeability, terrain-corrected wind"),
+}
+
+
+def load_validation_corrected() -> dict:
+    """
+    Both halves of Table 3, with the twelve kWh values asserted on load.
+
+    Differences are stated against the EnergyPlus reference, following the
+    committed validation, and are carried in BOTH forms -- absolute kWh and per
+    cent -- because the paper's argument is that the absolute gap is the
+    meaningful statement and the relative one destabilises as the load falls.
+    """
+    lines = [ln for ln in _require(VALIDATION_CSV).read_text().splitlines() if ln.strip()]
+    header = lines[0].split(",")
+    if header[:4] != ["section", "metric", "iso_kWh", "ep_kWh"]:
+        raise MissingQuantity(f"{VALIDATION_CSV} has an unexpected header: {header}")
+
+    rows: dict[str, dict[str, dict]] = {"baseline": {}, "corrected": {}}
+    for line in lines[1:]:
+        parts = line.split(",")
+        if parts[0] not in rows or len(parts) < len(header):
+            continue
+        rows[parts[0]][parts[1]] = {k: float(v) for k, v in zip(header[2:], parts[2:])}
+
+    out: dict[str, dict] = {}
+    bad = []
+    for section, metrics in EXPECTED_VALIDATION.items():
+        out[section] = {}
+        for metric, (iso_expected, ep_expected) in metrics.items():
+            if metric not in rows[section]:
+                raise MissingQuantity(f"{VALIDATION_CSV}: no {section}/{metric} row")
+            r = rows[section][metric]
+            iso, ep = r["iso_kWh"], r["ep_kWh"]
+            for name, got, want in (("ISO", iso, iso_expected), ("E+", ep, ep_expected)):
+                if abs(got - want) >= 0.005:
+                    bad.append(f"  {section} {metric} {name}: file gives {got:.4f}, "
+                               f"Table 3 states {want}")
+            out[section][metric] = {
+                "iso": iso,
+                "ep": ep,
+                "diff_kWh": iso - ep,
+                "diff_pct_vs_ep": 100.0 * (iso - ep) / ep,
+                "iso_per_sqm": r["iso_kWh_m2"],
+                "ep_per_sqm": r["ep_kWh_m2"],
+            }
+    if bad:
+        raise MissingQuantity(
+            "the corrected validation disagrees with Table 3:\n" + "\n".join(bad)
+        )
+
+    # Heating + cooling must be the stated total on both engines and both sides.
+    for section in out:
+        for side in ("iso", "ep"):
+            parts_sum = out[section]["Heating"][side] + out[section]["Cooling"][side]
+            if abs(parts_sum - out[section]["Total"][side]) >= 0.01:
+                raise MissingQuantity(
+                    f"{section} {side}: heating + cooling = {parts_sum:.4f} kWh but the "
+                    f"total row states {out[section]['Total'][side]:.4f} kWh"
+                )
+    return out
+
+
+def load_loss_paths() -> dict:
+    """
+    The Section 4.1.3 loss-path decomposition, ordered by absolute difference.
+
+    Read from ``loss_paths.csv`` and re-checked against ``DISCREPANCY.md``, so
+    the CSV cannot drift away from the document the paper cites.
+    """
+    lines = [ln for ln in _require(LOSS_PATHS_CSV).read_text().splitlines() if ln.strip()]
+    import csv as _csv
+
+    records = list(_csv.DictReader(lines))
+    paths = [r for r in records if r["is_total"] == "no"]
+    totals = [r for r in records if r["is_total"] == "yes"]
+    if not paths or len(totals) != 1:
+        raise MissingQuantity(
+            f"{LOSS_PATHS_CSV}: expected several path rows and exactly one total row"
+        )
+
+    def _cast(r):
+        return {
+            "path": r["path"],
+            "short_label": r["short_label"].replace(" | ", "\n"),
+            "iso": float(r["iso_kWh"]),
+            "ep": float(r["ep_kWh"]),
+            "diff": float(r["diff_kWh"]),
+        }
+
+    out = {
+        "paths": sorted((_cast(r) for r in paths), key=lambda r: abs(r["diff"]),
+                        reverse=True),
+        "total": _cast(totals[0]),
+    }
+
+    # Cross-check every value against the markdown table the paper cites. Cells
+    # there are printed to 0.1 kWh, so equality is asserted at that precision.
+    md = _require(DISCREPANCY_MD).read_text()
+    for r in out["paths"] + [out["total"]]:
+        row = next((ln for ln in md.splitlines()
+                    if ln.startswith("|") and r["path"] in ln), None)
+        if row is None:
+            raise MissingQuantity(
+                f"{DISCREPANCY_MD.name} has no loss-path row for {r['path']!r} -- "
+                f"{LOSS_PATHS_CSV.name} is stale; re-run "
+                f"tools/paper/extract_loss_paths.py"
+            )
+        cells = row.strip().strip("|").split("|")
+        for idx, key in ((1, "iso"), (2, "ep"), (3, "diff")):
+            want = float(cells[idx].replace("**", "").replace(",", "")
+                         .replace("−", "-").replace("+", "").strip())
+            if abs(want - r[key]) > 0.051:
+                raise MissingQuantity(
+                    f"{r['path']} {key}: CSV has {r[key]:+.1f} kWh, "
+                    f"{DISCREPANCY_MD.name} has {want:+.1f} kWh"
+                )
+
+    # The decomposition has to close: the paths must sum to the stated total on
+    # both sides, within what 0.1 kWh printing allows.
+    tol = 0.05 * (len(out["paths"]) + 1) + 1e-9
+    for key in ("iso", "ep"):
+        summed = sum(r[key] for r in out["paths"])
+        if abs(summed - out["total"][key]) > tol:
+            raise MissingQuantity(
+                f"loss paths do not close on the {key} side: {summed:+.1f} kWh against "
+                f"a stated total of {out['total'][key]:+.1f} kWh"
+            )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Hourly EnergyPlus series for the four reference-model defects (F11)
+# ---------------------------------------------------------------------------
+
+EP_HOURLY_FILES = {
+    "corrected_matched": "hourly_corrected_matched.csv",
+    "as_published_wind": "hourly_as_published_wind.csv",
+    "baseline_repaired": "hourly_baseline_repaired.csv",
+}
+
+J_PER_KWH = 3.6e6
+
+
+def load_ep_hourly(which: str) -> dict:
+    """One of the three committed hourly EnergyPlus series, as numpy arrays."""
+    try:
+        name = EP_HOURLY_FILES[which]
+    except KeyError as exc:
+        raise MissingQuantity(f"no hourly EnergyPlus series named {which!r}") from exc
+    path = EP_HOURLY_DIR / name
+    if not path.exists():
+        raise MissingQuantity(
+            f"hourly EnergyPlus series {path} is missing. The raw EnergyPlus output "
+            f"directory is gitignored as regenerable intermediate; regenerate with "
+            f"tools/diagnostics/ep_hourly_defect_signatures.py --energyplus <bin>"
+        )
+    lines = path.read_text().splitlines()
+    header = lines[0].split(",")
+    cols: dict[str, list[float]] = {h: [] for h in header[2:]}
+    for line in lines[1:]:
+        parts = line.split(",")
+        for h, v in zip(header[2:], parts[2:]):
+            cols[h].append(float(v))
+    out = {k: np.array(v, dtype=float) for k, v in cols.items()}
+    n = {len(v) for v in out.values()}
+    if n != {8760}:
+        raise MissingQuantity(f"{path}: hourly series are {n} long, expected 8760")
+    return out
+
+
+def load_ep_hourly_provenance() -> dict:
+    path = EP_HOURLY_DIR / "provenance.json"
+    if not path.exists():
+        raise MissingQuantity(
+            f"{path} is missing; regenerate the hourly series with "
+            f"tools/diagnostics/ep_hourly_defect_signatures.py"
+        )
+    return json.loads(path.read_text())
+
+
+# ---------------------------------------------------------------------------
+# Case geometry (F13). Read from examples/apt305_building.py rather than
+# restated, so the drawing cannot drift away from the simulated case.
+# ---------------------------------------------------------------------------
+
+def load_geometry() -> dict:
+    """
+    The Apt 305 envelope, from the building dictionary the engine is actually run on.
+
+    Returns the one outdoor-exposed wall and its glazing, the five party
+    surfaces, and the conductance share the adjacent-zone correction acts on.
+    """
+    import importlib.util
+
+    src = REPO / "examples" / "apt305_building.py"
+    spec = importlib.util.spec_from_file_location("apt305_building", _require(src))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    bui = module.build_bui()
+
+    exposed, party = [], []
+    for s in bui["building_surface"]:
+        rec = {
+            "name": s["name"],
+            "area": float(s["area"]),
+            "u_value": float(s["u_value"]),
+            "adj_zone": s.get("name_adj_zone"),
+            "azimuth": float(s["orientation"]["azimuth"]),
+            "tilt": float(s["orientation"]["tilt"]),
+            "window": s["type"] == "transparent",
+            "g_value": float(s["g_value"]) if "g_value" in s else None,
+        }
+        # The five party surfaces are the ADJ class; everything else in this case
+        # is on the one outdoor-exposed west facade.
+        (party if s["type"] == "adjacent" else exposed).append(rec)
+
+    ua_exposed = sum(s["area"] * s["u_value"] for s in exposed)
+    ua_party = sum(s["area"] * s["u_value"] for s in party)
+    return {
+        "exposed": exposed,
+        "party": party,
+        "area_exposed": sum(s["area"] for s in exposed),
+        "area_party": sum(s["area"] for s in party),
+        "UA_exposed": ua_exposed,
+        "UA_party": ua_party,
+        "party_UA_share_pct": 100.0 * ua_party / (ua_exposed + ua_party),
+        "len_ns": module.LEN_NS,
+        "len_ew": module.LEN_EW,
+        "height": module.HEIGHT,
+        "floor_area": module.FLOOR_AREA,
+        "adj_setpoint": module.ADJ_SETPOINT,
+        "floor_level": bui["site"]["floor_level"],
+    }
