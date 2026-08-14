@@ -1,0 +1,7 @@
+path,short_label,iso_kWh,ep_kWh,diff_kWh,is_total
+"West windows (1.62 m²), conduction + transmitted solar",West windows (1.62 m²) | conduction + transmitted solar,488.1,389.1,99.1,no
+"Designed ventilation (2.0 l/s·m², H_ve = 48.4 W/K)",Designed ventilation | (H_ve = 48.4 W/K),-1748.1,-1663.0,-85.1,no
+"West exterior wall (opaque, 11.88 m²)","West exterior wall | (opaque, 11.88 m²)",-189.4,-169.0,-20.4,no
+"Five party surfaces (75.10 m², to 20 °C neighbours)","Five party surfaces | (75.10 m², to 20 °C neighbours)",714.1,704.3,9.9,no
+Envelope infiltration,Envelope infiltration,-96.3,-92.8,-3.4,no
+Σ compared paths,Sum of the compared paths,-831.5,-831.5,-0.0,yes
